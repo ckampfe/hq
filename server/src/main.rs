@@ -110,8 +110,6 @@ async fn receive_job(
 
     let mut conn = state.pool.acquire().await?;
 
-    let mut txn = conn.begin().await?;
-
     let job: Option<Job> = sqlx::query_as(
         "
         update hq_jobs
@@ -143,10 +141,8 @@ async fn receive_job(
     )
     .bind(&queue_query.queue)
     .bind(5)
-    .fetch_optional(&mut *txn)
+    .fetch_optional(&mut *conn)
     .await?;
-
-    txn.commit().await?;
 
     if let Some(mut job) = job {
         // TODO probably a better way,
