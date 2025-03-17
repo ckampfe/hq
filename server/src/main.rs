@@ -13,6 +13,9 @@
 // - [ ] mark job as failed after N attempts
 // - [ ] figure out visibility timeout
 // - [ ] some web ui thing
+// - [ ] investigate queueing order: does updated_at make sense?
+//       it would send jobs to the back of the queue in the event that they fail,
+//       does this matter? should we retry jobs consecutively?
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
