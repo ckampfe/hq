@@ -28,12 +28,12 @@ class Client:
     def list_queues(self):
         return self.client.get(self.url + "/queues")
 
-    def enqueue(self, queue: str, job_args: dict):
+    def enqueue_job(self, queue: str, job_args: dict):
         return self.client.post(
             self.url + "/jobs/enqueue", params={"queue": queue}, json=job_args
         )
 
-    def receive(self, queue: str):
+    def receive_job(self, queue: str):
         return self.client.get(self.url + "/jobs/receive", params={"queue": queue})
 
     def __enter__(self):

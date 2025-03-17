@@ -1,8 +1,4 @@
 import hq
-import pytest
-import subprocess
-import time
-import shlex
 
 
 def test_create_queue(hq_server):
@@ -43,24 +39,3 @@ def test_list_queues_nonempty(hq_server):
     )
     assert body[0]["name"] == "abc"
     assert body[0]["max_attempts"] == 5
-
-
-@pytest.fixture(scope="function")
-def hq_server():
-    command = "cargo run -- --database=foo --in-memory"
-    command = shlex.split(command)
-
-    proc = subprocess.Popen(
-        command,
-        cwd="../server",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-
-    time.sleep(2)
-
-    assert not proc.poll(), proc.stdout.read().decode("utf-8")
-
-    yield proc
-
-    proc.terminate()

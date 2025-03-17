@@ -90,7 +90,7 @@ async fn enqueue_job(
 #[derive(sqlx::FromRow, Serialize)]
 struct Job {
     id: sqlx::types::Uuid,
-    args: String,
+    args: serde_json::Value,
     queue: String,
     attempts: i64,
     inserted_at: String,
@@ -112,18 +112,6 @@ async fn receive_job(
 
     let mut txn = conn.begin().await?;
 
-    let (queue_id,): (i64,) = sqlx::query_as(
-        "
-    select
-        id
-    from hq_queues
-    where name = ?
-        ",
-    )
-    .bind(&queue_query.queue)
-    .fetch_one(&mut *txn)
-    .await?;
-
     let job: Option<Job> = sqlx::query_as(
         "
         update hq_jobs
@@ -133,7 +121,7 @@ async fn receive_job(
             updated_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
         where id = (
             select
-                id
+                hq_jobs.id
             from hq_jobs
             inner join hq_queues
                 on hq_queues.id = hq_jobs.queue_id
@@ -141,13 +129,13 @@ async fn receive_job(
             and completed_at is null
             and locked_at is null
             and attempts <= ?
-            order by inserted_at asc
+            order by hq_jobs.inserted_at asc
             limit 1
         )
         returning
             id,
             args,
-            'placeholder' as queue,
+            '' as queue,
             attempts,
             inserted_at,
             updated_at;
@@ -160,7 +148,10 @@ async fn receive_job(
 
     txn.commit().await?;
 
-    if let Some(job) = job {
+    if let Some(mut job) = job {
+        // TODO probably a better way,
+        // but can't figure it out in the query yet
+        job.queue = queue_query.queue.clone();
         Ok(axum::Json(ReceiveResponse { job: Some(job) }))
     } else {
         Ok(axum::Json(ReceiveResponse { job: None }))
