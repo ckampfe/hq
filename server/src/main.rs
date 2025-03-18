@@ -96,8 +96,6 @@ struct Job {
     args: serde_json::Value,
     queue: String,
     attempts: i64,
-    inserted_at: String,
-    updated_at: String,
 }
 
 #[derive(Serialize)]
@@ -118,8 +116,7 @@ async fn receive_job(
         update hq_jobs
         set
             attempts = attempts + 1,
-            locked_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'),
-            updated_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
+            locked_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
         where id = (
             select
                 hq_jobs.id
@@ -137,9 +134,7 @@ async fn receive_job(
             id,
             args,
             '' as queue,
-            attempts,
-            inserted_at,
-            updated_at;
+            attempts;
             ",
     )
     .bind(&queue_query.queue)
@@ -157,11 +152,34 @@ async fn receive_job(
     }
 }
 
-async fn delete_job(
+async fn complete_job(
     State(state): State<Arc<Mutex<AppState>>>,
     Path(id): Path<Uuid>,
-) -> axum::response::Result<impl IntoResponse> {
-    Ok("hi")
+) -> axum::response::Result<impl IntoResponse, AppError> {
+    let state = state.lock().await;
+    let mut conn = state.pool.acquire().await?;
+
+    // TODO think about this,
+    // should we have a notion of "receipt handle"?
+    // https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_DeleteMessage.html
+    sqlx::query(
+        "
+    update hq_jobs
+    set
+        completed_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'),
+        locked_at = null
+    where id = ?
+    and locked_at is not null
+    and completed_at is null
+    returning
+        id
+    ",
+    )
+    .bind(id)
+    .execute(&mut *conn)
+    .await?;
+
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -213,17 +231,15 @@ async fn create_queue(
     Ok(())
 }
 
-async fn update_queue() -> axum::response::Result<impl IntoResponse, AppError> {
-    todo!();
-    Ok(())
-}
+// async fn update_queue() -> axum::response::Result<impl IntoResponse, AppError> {
+//     todo!();
+//     Ok(())
+// }
 
 #[derive(sqlx::FromRow, Serialize)]
 struct ListQueuesResponse {
     name: String,
     max_attempts: i64,
-    inserted_at: String,
-    updated_at: String,
 }
 
 async fn list_queues(
@@ -237,9 +253,7 @@ async fn list_queues(
         "
     select
         name,
-        max_attempts,
-        inserted_at,
-        updated_at
+        max_attempts
     from hq_queues
     order by name
     ",
@@ -356,10 +370,11 @@ async fn main() -> anyhow::Result<()> {
     let queue_routes = Router::new()
         .route("/jobs/enqueue", post(enqueue_job))
         .route("/jobs/receive", get(receive_job))
-        .route("/jobs/{id}", delete(delete_job))
+        .route("/jobs/{id}/complete", put(complete_job))
         .route("/queues", get(list_queues))
         .route("/queues", post(create_queue))
-        .route("/queues/{id}", put(update_queue));
+        // .route("/queues/{id}", put(update_queue))
+        ;
 
     let router = Router::new();
 

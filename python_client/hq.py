@@ -11,8 +11,16 @@ class Queue:
 
 
 @dataclass
+class Enqueued:
+    job_id: str
+
+
+@dataclass
 class Job:
     id: str
+    queue: str
+    args: dict[str, object]
+    attempts: int
 
 
 class Client:
@@ -20,21 +28,40 @@ class Client:
         self.url = url
         self.client = httpx.Client()
 
-    def create_queue(self, queue_options: Queue):
-        return self.client.post(
+    def create_queue(self, queue_options: Queue) -> None:
+        self.client.post(
             self.url + "/queues", json=dataclasses.asdict(queue_options)
+        ).raise_for_status()
+
+    def list_queues(self) -> list[Queue]:
+        return [
+            Queue(**q)
+            for q in self.client.get(self.url + "/queues").raise_for_status().json()
+        ]
+
+    def enqueue_job(self, queue: str, job_args: dict) -> Enqueued:
+        body = (
+            self.client.post(
+                self.url + "/jobs/enqueue", params={"queue": queue}, json=job_args
+            )
+            .raise_for_status()
+            .json()
         )
 
-    def list_queues(self):
-        return self.client.get(self.url + "/queues")
+        return Enqueued(**body)
 
-    def enqueue_job(self, queue: str, job_args: dict):
-        return self.client.post(
-            self.url + "/jobs/enqueue", params={"queue": queue}, json=job_args
+    def receive_job(self, queue: str) -> Job | None:
+        decoded = (
+            self.client.get(self.url + "/jobs/receive", params={"queue": queue})
+            .raise_for_status()
+            .json()
         )
 
-    def receive_job(self, queue: str):
-        return self.client.get(self.url + "/jobs/receive", params={"queue": queue})
+        if decoded["job"]:
+            return Job(**decoded["job"])
+
+    def complete_job(self, job_id: str) -> None:
+        self.client.put(self.url + f"/jobs/{job_id}/complete").raise_for_status()
 
     def __enter__(self):
         return self
