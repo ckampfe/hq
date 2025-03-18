@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 // todo
 //
+// - [ ] curl/shell client
+// - [ ] rust client
+//
 // queues
 // - [x] create
 // - [x] list
@@ -9,7 +12,7 @@
 // jobs
 // - [x] enqueue job
 // - [x] receive job
-// - [ ] mark job complete
+// - [x] mark job complete
 // - [ ] mark job as failed after N attempts
 // - [ ] figure out visibility timeout
 // - [ ] some web ui thing
