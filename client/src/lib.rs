@@ -120,7 +120,7 @@ mod tests {
             .unwrap();
     }
 
-    async fn serve() -> (u16, ShutdownOnDrop) {
+    async fn serve() -> (u16, ServerHandle) {
         static PORT: AtomicU16 = AtomicU16::new(10000);
 
         let port = PORT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -147,16 +147,17 @@ mod tests {
                     rx.await.unwrap();
                 })
                 .await
+                .unwrap()
         });
 
-        (port, ShutdownOnDrop { tx: Some(tx) })
+        (port, ServerHandle { tx: Some(tx) })
     }
 
-    struct ShutdownOnDrop {
+    struct ServerHandle {
         tx: Option<tokio::sync::oneshot::Sender<()>>,
     }
 
-    impl Drop for ShutdownOnDrop {
+    impl Drop for ServerHandle {
         fn drop(&mut self) {
             let tx = self.tx.take().unwrap();
             tx.send(()).unwrap();
