@@ -1,51 +1,40 @@
-#![forbid(unsafe_code)]
-// todo
-//
-// - [ ] curl/shell client
-// - [ ] rust client
-//
-// queues
-// - [x] create
-// - [x] list
-// - [ ] update
-// - [ ] delete (and all jobs)
-// jobs
-// - [x] enqueue job
-// - [x] receive job
-// - [x] mark job complete
-// - [ ] mark job as failed after N attempts
-// - [ ] figure out visibility timeout
-// - [ ] some web ui thing
-// - [ ] investigate queueing order: does updated_at make sense?
-//       it would send jobs to the back of the queue in the event that they fail,
-//       does this matter? should we retry jobs consecutively?
-
-use axum::extract::{Path, Query, State};
+use axum::Router;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post, put};
-use axum::{Json, Router};
+use axum::routing::{get, post, put};
 use clap::Parser;
-use serde::{Deserialize, Serialize};
 use sqlx::Sqlite;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
-// async fn update_queue() -> axum::response::Result<impl IntoResponse, AppError> {
-//     todo!();
-//     Ok(())
-// }
+pub mod job;
+pub mod queue;
+#[cfg(feature = "web")]
+pub mod web;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+#[derive(Parser, Clone, Debug)]
+pub struct Options {
+    /// the port to bind the server to
+    #[arg(short, long, env, default_value = "9999")]
+    pub port: u16,
+    /// the maximum request timeout, in seconds
+    #[arg(short, long, env)]
+    pub request_timeout: Option<u64>,
+    /// the database path
+    #[arg(short, long, env)]
+    pub database: String,
+    /// should the db be in memory
+    #[arg(short, long, env, default_value_t = false)]
+    pub in_memory: bool,
+}
 
-    let options = server::Options::parse();
+#[derive(Debug)]
+pub struct AppState {
+    pub pool: sqlx::Pool<Sqlite>,
+    pub options: Options,
+}
 
+pub async fn app(options: Options) -> anyhow::Result<Router> {
     let db_name = if options.in_memory {
         "sqlite::memory:".to_string()
     } else {
@@ -109,10 +98,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .execute(&mut *conn)
     .await?;
-
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", options.port)).await?;
-
-    let state = server::AppState {
+    let state = AppState {
         pool,
         options: options.clone(),
     };
@@ -120,11 +106,11 @@ async fn main() -> anyhow::Result<()> {
     let state = Arc::new(Mutex::new(state));
 
     let queue_routes = Router::new()
-        .route("/jobs/enqueue", post(server::job::enqueue))
-        .route("/jobs/try_receive", get(server::job::try_receive))
-        .route("/jobs/{id}/complete", put(server::job::complete))
-        .route("/queues", get(server::queue::list))
-        .route("/queues", post(server::queue::create))
+        .route("/jobs/enqueue", post(job::enqueue))
+        .route("/jobs/try_receive", get(job::try_receive))
+        .route("/jobs/{id}/complete", put(job::complete))
+        .route("/queues", get(queue::list))
+        .route("/queues", post(queue::create))
         // .route("/queues/{id}", put(update_queue))
         ;
 
@@ -132,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "web")]
     let router = {
-        let web_routes = server::web::routes(Arc::clone(&state));
+        let web_routes = web::routes(Arc::clone(&state));
         router.merge(web_routes)
     };
 
@@ -151,11 +137,11 @@ async fn main() -> anyhow::Result<()> {
         router
     };
 
-    Ok(axum::serve(listener, router).await?)
+    Ok(router)
 }
 
 // Make our own error that wraps `anyhow::Error`.
-struct AppError(anyhow::Error);
+pub struct AppError(anyhow::Error);
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {

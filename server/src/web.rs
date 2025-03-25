@@ -124,7 +124,7 @@ async fn web_index(
     })
 }
 
-pub(crate) fn routes(state: Arc<Mutex<AppState>>) -> Router<Arc<Mutex<AppState>>> {
+pub fn routes(state: Arc<Mutex<AppState>>) -> Router<Arc<Mutex<AppState>>> {
     Router::new()
         .route("/web", get(web_index))
         .with_state(state)
