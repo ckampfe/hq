@@ -1,34 +1,15 @@
 use crate::{AppError, AppState};
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use uuid::Uuid;
-
-#[derive(sqlx::FromRow, Serialize)]
-struct ListQueuesResponse {
-    name: String,
-    max_attempts: i64,
-}
 
 pub async fn list(
     State(state): State<Arc<Mutex<AppState>>>,
 ) -> axum::response::Result<impl IntoResponse, AppError> {
     let state = state.lock().await;
 
-    let mut conn = state.pool.acquire().await?;
-
-    let queues: Vec<ListQueuesResponse> = sqlx::query_as(
-        "
-    select
-        name,
-        max_attempts
-    from hq_queues
-    order by name
-    ",
-    )
-    .fetch_all(&mut *conn)
-    .await?;
+    let queues = state.repo.get_queues().await?;
 
     Ok(axum::Json(queues))
 }
@@ -54,30 +35,20 @@ pub async fn create(
 
     let state = state.lock().await;
 
-    let mut conn = state.pool.acquire().await.map_err(|e| AppError(e.into()))?;
-
-    let queue_id = Uuid::new_v4();
-
-    sqlx::query(
-        "
-    insert into hq_queues (id, name, max_attempts) values (?, ?, ?);
-    ",
-    )
-    .bind(queue_id)
-    .bind(create_queue.name)
-    .bind(create_queue.max_attempts)
-    .execute(&mut *conn)
-    .await
-    .map_err(|e| match e {
-        sqlx::Error::Database(ref database_error) => {
-            if database_error.is_unique_violation() {
-                (StatusCode::CONFLICT, "Error: queue name must be unique").into_response()
-            } else {
-                AppError(e.into()).into_response()
+    state
+        .repo
+        .create_queue(&create_queue.name, create_queue.max_attempts)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::Database(ref database_error) => {
+                if database_error.is_unique_violation() {
+                    (StatusCode::CONFLICT, "Error: queue name must be unique").into_response()
+                } else {
+                    AppError(e.into()).into_response()
+                }
             }
-        }
-        _ => AppError(e.into()).into_response(),
-    })?;
+            _ => AppError(e.into()).into_response(),
+        })?;
 
     Ok(())
 }

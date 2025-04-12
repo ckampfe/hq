@@ -3,12 +3,13 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use clap::Parser;
-use sqlx::Sqlite;
-use std::{str::FromStr, sync::Arc};
+use repo::Repo;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub mod job;
 pub mod queue;
+pub mod repo;
 #[cfg(feature = "web")]
 pub mod web;
 
@@ -30,7 +31,7 @@ pub struct Options {
 
 #[derive(Debug)]
 pub struct AppState {
-    pub pool: sqlx::Pool<Sqlite>,
+    pub repo: Repo,
     pub options: Options,
 }
 
@@ -41,65 +42,16 @@ pub async fn app(options: Options) -> anyhow::Result<Router> {
         options.database.clone()
     };
 
-    let opts = sqlx::sqlite::SqliteConnectOptions::from_str(&db_name)?
-        .busy_timeout(std::time::Duration::from_secs(5))
-        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
-        .create_if_missing(true)
-        .foreign_keys(true)
-        .in_memory(options.in_memory);
-
-    let pool = sqlx::SqlitePool::connect_with(opts).await?;
-
-    let mut conn = pool.acquire().await?;
-
-    sqlx::raw_sql(
-        "
-        create table if not exists hq_queues (
-            id blob primary key,
-            name text not null,
-            max_attempts integer not null default -1,
-            inserted_at datetime not null default(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
-            updated_at datetime not null default(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))
-        );
-
-        create unique index if not exists name_idx on hq_queues(name);
-
-        create trigger if not exists hq_queues_updated_at after update on hq_queues
-        begin
-            update hq_queues set updated_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
-            where id = old.id;
-        end;
-
-        create table if not exists hq_jobs (
-            id blob primary key,
-            args text not null,
-            queue_id integer not null,
-            attempts integer not null default 0,
-            inserted_at datetime not null default(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
-            updated_at datetime not null default(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
-            locked_at datetime,
-            completed_at datetime,
-            failed_at datetime,
-
-            foreign key(queue_id) references hq_queues(id)
-        );
-
-        create trigger if not exists hq_jobs_updated_at after update on hq_jobs
-        begin
-            update hq_jobs set updated_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
-            where id = old.id;
-        end;
-
-        create index if not exists queue_id_idx on hq_jobs(queue_id);
-        create index if not exists inserted_at_idx on hq_jobs(inserted_at);
-        create index if not exists locked_at_idx on hq_jobs(locked_at);
-        create index if not exists completed_at_idx on hq_jobs(completed_at);
-    ",
-    )
-    .execute(&mut *conn)
+    let repo = Repo::new(repo::Options {
+        db_name,
+        in_memory: options.in_memory,
+    })
     .await?;
+
+    repo.migrate().await?;
+
     let state = AppState {
-        pool,
+        repo,
         options: options.clone(),
     };
 

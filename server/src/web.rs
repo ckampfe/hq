@@ -45,7 +45,7 @@ macro_rules! layout {
 }
 
 #[derive(sqlx::FromRow, Debug)]
-struct Job {
+pub struct Job {
     id: Vec<u8>,
     args: String,
     queue: String,
@@ -62,27 +62,7 @@ async fn web_index(
 ) -> axum::response::Result<impl IntoResponse, AppError> {
     let state = state.lock().await;
 
-    let mut conn = state.pool.acquire().await.unwrap();
-
-    let jobs_sample: Vec<Job> = sqlx::query_as(
-        "
-    select
-        id,
-        args,
-        queue,
-        attempts,
-        inserted_at,
-        updated_at,
-        locked_at,
-        completed_at,
-        failed_at
-    from hq_jobs
-    order by inserted_at desc
-    limit 10;
-    ",
-    )
-    .fetch_all(&mut *conn)
-    .await?;
+    let jobs_sample = state.repo.jobs_sample(10).await?;
 
     Ok(layout! {
         html! {
