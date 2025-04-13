@@ -44,13 +44,13 @@ pub struct ReceiveResponse {
     job: Option<Job>,
 }
 
-pub async fn try_receive(
+pub async fn receive(
     State(state): State<Arc<Mutex<AppState>>>,
     queue_query: Query<QueueQuery>,
 ) -> axum::response::Result<Json<ReceiveResponse>, AppError> {
     let state = state.lock().await;
 
-    let job = state.repo.try_receive_job(&queue_query.queue).await?;
+    let job = state.repo.receive_job(&queue_query.queue).await?;
 
     Ok(axum::Json(ReceiveResponse { job }))
 }

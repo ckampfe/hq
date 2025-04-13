@@ -11,7 +11,7 @@ pub struct Options {
     pub in_memory: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Repo {
     pool: sqlx::Pool<Sqlite>,
 }
@@ -68,7 +68,7 @@ impl Repo {
         Ok(job_id)
     }
 
-    pub async fn try_receive_job(&self, queue: &str) -> anyhow::Result<Option<Job>> {
+    pub async fn receive_job(&self, queue: &str) -> anyhow::Result<Option<Job>> {
         const QUERY: &str = "
         update hq_jobs
         set
@@ -83,7 +83,7 @@ impl Repo {
                 and hq_queues.name = ?
             and completed_at is null
             and locked_at is null
-            and attempts <= ?
+            and attempts < hq_queues.max_attempts
             order by hq_jobs.updated_at asc
             limit 1
         )
@@ -98,7 +98,7 @@ impl Repo {
 
         let job: Option<Job> = sqlx::query_as(QUERY)
             .bind(queue)
-            .bind(5)
+            // .bind(5)
             .fetch_optional(&mut *conn)
             .await?;
 
@@ -155,9 +155,14 @@ impl Repo {
             .await
     }
 
-    pub async fn create_queue(&self, name: &str, max_attempts: i64) -> sqlx::Result<()> {
+    pub async fn create_queue(
+        &self,
+        name: &str,
+        max_attempts: i64,
+        visibility_timeout_seconds: i64,
+    ) -> sqlx::Result<()> {
         const QUERY: &str = "
-        insert into hq_queues (id, name, max_attempts) values (?, ?, ?);
+        insert into hq_queues (id, name, max_attempts, visibility_timeout_seconds) values (?, ?, ?, ?);
         ";
 
         let mut conn = self.pool.acquire().await?;
@@ -168,6 +173,7 @@ impl Repo {
             .bind(queue_id)
             .bind(name)
             .bind(max_attempts)
+            .bind(visibility_timeout_seconds)
             .execute(&mut *conn)
             .await?;
 
@@ -188,12 +194,98 @@ impl Repo {
         sqlx::query_as(QUERY).fetch_all(&mut *conn).await
     }
 
+    pub(crate) async fn unlock_jobs_locked_longer_than_timeout(
+        &self,
+        queue: &str,
+    ) -> sqlx::Result<()> {
+        // do the queue meta as a query rather than as params,
+        // because both of these are params that can be set by the user
+        const QUEUE_META_QUERY: &str = "
+        select
+            max_attempts,
+            visibility_timeout_seconds
+        from hq_queues
+        where name = ?
+        ";
+
+        // unlock queries that have been locked
+        // for longer than timeout and have attempts <= allowed
+        const UNLOCK_LOCKED_TIMEOUT_QUERY: &str = "
+        update hq_jobs
+        set
+            locked_at = null
+        where id = (
+            select
+                hq_jobs.id
+            from hq_jobs
+            inner join hq_queues
+                on hq_queues.id = hq_jobs.queue_id
+                and hq_queues.name = ?
+            where locked_at is not null
+            and completed_at is null
+            and failed_at is null
+            and cast((julianday(current_timestamp) - julianday(locked_at)) * 86400.0 as integer) > ?
+            and attempts <= ?
+        )
+        ";
+
+        // unlocked and fail queries that have been locked
+        // for longer than timeout and have attempts > allowed
+        const FAIL_LOCKED_TIMEOUT_QUERY: &str = "
+        update hq_jobs
+        set
+            failed_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'),
+            locked_at = null
+        where id = (
+            select
+                hq_jobs.id
+            from hq_jobs
+            inner join hq_queues
+                on hq_queues.id = hq_jobs.queue_id
+                and hq_queues.name = ?
+            where locked_at is not null
+            and completed_at is null
+            and failed_at is null
+            and cast((julianday(current_timestamp) - julianday(locked_at)) * 86400.0 as integer) > ?
+            and attempts > ?
+        )
+        ";
+
+        let mut conn = self.pool.acquire().await?;
+
+        let mut txn = conn.begin().await?;
+
+        let (max_attempts, max_visibility_seconds): (i64, i64) = sqlx::query_as(QUEUE_META_QUERY)
+            .bind(queue)
+            .fetch_one(&mut *txn)
+            .await?;
+
+        sqlx::query(UNLOCK_LOCKED_TIMEOUT_QUERY)
+            .bind(queue)
+            .bind(max_visibility_seconds)
+            .bind(max_attempts)
+            .execute(&mut *txn)
+            .await?;
+
+        sqlx::query(FAIL_LOCKED_TIMEOUT_QUERY)
+            .bind(queue)
+            .bind(max_visibility_seconds)
+            .bind(max_attempts)
+            .execute(&mut *txn)
+            .await?;
+
+        txn.commit().await?;
+
+        Ok(())
+    }
+
     pub async fn migrate(&self) -> anyhow::Result<()> {
         const QUERY: &str = "
         create table if not exists hq_queues (
             id blob primary key,
             name text not null,
             max_attempts integer not null default -1,
+            visibility_timeout_seconds integer not null default -1,
             inserted_at datetime not null default(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
             updated_at datetime not null default(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))
         );
@@ -242,6 +334,6 @@ impl Repo {
 
 #[derive(sqlx::FromRow, Serialize, Debug)]
 pub struct Queue {
-    name: String,
-    max_attempts: i64,
+    pub name: String,
+    pub max_attempts: i64,
 }

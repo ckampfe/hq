@@ -1,8 +1,9 @@
-use crate::{AppError, AppState};
+use crate::{AppError, AppState, repo::Repo};
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing::debug;
 
 pub async fn list(
     State(state): State<Arc<Mutex<AppState>>>,
@@ -33,11 +34,23 @@ pub async fn create(
             .into());
     }
 
-    let state = state.lock().await;
+    if create_queue.visibility_timeout_seconds < 1 {
+        return Err((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "visibility_timeout_seconds must be >= 1",
+        )
+            .into());
+    }
+
+    let mut state = state.lock().await;
 
     state
         .repo
-        .create_queue(&create_queue.name, create_queue.max_attempts)
+        .create_queue(
+            &create_queue.name,
+            create_queue.max_attempts,
+            create_queue.visibility_timeout_seconds,
+        )
         .await
         .map_err(|e| match e {
             sqlx::Error::Database(ref database_error) => {
@@ -50,5 +63,28 @@ pub async fn create(
             _ => AppError(e.into()).into_response(),
         })?;
 
+    let repo = state.repo.clone();
+
+    let name = create_queue.name.clone();
+
+    let unlock_handle = start_lock_task(repo, name);
+
+    state
+        .queue_lock_tasks
+        .insert(create_queue.name, unlock_handle);
+
     Ok(())
+}
+
+pub fn start_lock_task(repo: Repo, queue: String) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        debug!("started queue unlock/fail task for {}", &queue);
+
+        const ONE_SECOND: std::time::Duration = std::time::Duration::from_secs(1);
+
+        loop {
+            tokio::time::sleep(ONE_SECOND).await;
+            let _ = repo.unlock_jobs_locked_longer_than_timeout(&queue).await;
+        }
+    })
 }

@@ -3,7 +3,9 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use clap::Parser;
+use queue::start_lock_task;
 use repo::Repo;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -33,6 +35,7 @@ pub struct Options {
 pub struct AppState {
     pub repo: Repo,
     pub options: Options,
+    pub queue_lock_tasks: HashMap<String, tokio::task::JoinHandle<()>>,
 }
 
 pub async fn app(options: Options) -> anyhow::Result<Router> {
@@ -50,16 +53,28 @@ pub async fn app(options: Options) -> anyhow::Result<Router> {
 
     repo.migrate().await?;
 
+    let mut queue_lock_tasks = HashMap::new();
+
+    let queues = repo.get_queues().await?;
+
+    for queue in queues {
+        queue_lock_tasks.insert(
+            queue.name.clone(),
+            start_lock_task(repo.clone(), queue.name),
+        );
+    }
+
     let state = AppState {
         repo,
         options: options.clone(),
+        queue_lock_tasks,
     };
 
     let state = Arc::new(Mutex::new(state));
 
     let queue_routes = Router::new()
         .route("/jobs/enqueue", post(job::enqueue))
-        .route("/jobs/try_receive", get(job::try_receive))
+        .route("/jobs/receive", get(job::receive))
         .route("/jobs/{id}/complete", put(job::complete))
         .route("/queues", get(queue::list))
         .route("/queues", post(queue::create))
