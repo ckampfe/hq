@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use serde::Serialize;
-use sqlx::{Acquire, Sqlite};
+use sqlx::{Connection, Sqlite};
 use uuid::Uuid;
 
 use crate::{job::Job, web};
@@ -47,7 +47,7 @@ impl Repo {
 
         let mut conn = self.pool.acquire().await?;
 
-        let mut txn = conn.begin().await?;
+        let mut txn = conn.begin_with("BEGIN IMMEDIATE").await?;
 
         let (queue_id,): (Uuid,) = sqlx::query_as(GET_QUEUE_ID_QUERY)
             .bind(queue)
@@ -253,7 +253,7 @@ impl Repo {
 
         let mut conn = self.pool.acquire().await?;
 
-        let mut txn = conn.begin().await?;
+        let mut txn = conn.begin_with("BEGIN IMMEDIATE").await?;
 
         let (max_attempts, max_visibility_seconds): (i64, i64) = sqlx::query_as(QUEUE_META_QUERY)
             .bind(queue)
