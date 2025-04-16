@@ -74,7 +74,7 @@ impl Repo {
         set
             attempts = attempts + 1,
             locked_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
-        where id = (
+        where id in (
             select
                 hq_jobs.id
             from hq_jobs
@@ -83,6 +83,7 @@ impl Repo {
                 and hq_queues.name = ?
             and completed_at is null
             and locked_at is null
+            and failed_at is null
             and attempts < hq_queues.max_attempts
             order by hq_jobs.updated_at asc
             limit 1
@@ -194,38 +195,24 @@ impl Repo {
         sqlx::query_as(QUERY).fetch_all(&mut *conn).await
     }
 
-    pub(crate) async fn unlock_jobs_locked_longer_than_timeout(
-        &self,
-        queue: &str,
-    ) -> sqlx::Result<()> {
-        // do the queue meta as a query rather than as params,
-        // because both of these are params that can be set by the user
-        const QUEUE_META_QUERY: &str = "
-        select
-            max_attempts,
-            visibility_timeout_seconds
-        from hq_queues
-        where name = ?
-        ";
-
+    pub(crate) async fn unlock_jobs_locked_longer_than_timeout(&self) -> sqlx::Result<()> {
         // unlock queries that have been locked
         // for longer than timeout and have attempts <= allowed
         const UNLOCK_LOCKED_TIMEOUT_QUERY: &str = "
         update hq_jobs
         set
             locked_at = null
-        where id = (
+        where id in (
             select
                 hq_jobs.id
             from hq_jobs
             inner join hq_queues
                 on hq_queues.id = hq_jobs.queue_id
-                and hq_queues.name = ?
             where locked_at is not null
             and completed_at is null
             and failed_at is null
-            and cast((julianday(current_timestamp) - julianday(locked_at)) * 86400.0 as integer) > ?
-            and attempts <= ?
+            and cast((julianday(current_timestamp) - julianday(locked_at)) * 86400.0 as integer) > hq_queues.visibility_timeout_seconds
+            and attempts <= hq_queues.max_attempts
         )
         ";
 
@@ -236,18 +223,17 @@ impl Repo {
         set
             failed_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'),
             locked_at = null
-        where id = (
+        where id in (
             select
                 hq_jobs.id
             from hq_jobs
             inner join hq_queues
                 on hq_queues.id = hq_jobs.queue_id
-                and hq_queues.name = ?
             where locked_at is not null
             and completed_at is null
             and failed_at is null
-            and cast((julianday(current_timestamp) - julianday(locked_at)) * 86400.0 as integer) > ?
-            and attempts > ?
+            and cast((julianday(current_timestamp) - julianday(locked_at)) * 86400.0 as integer) > hq_queues.visibility_timeout_seconds
+            and attempts > hq_queues.max_attempts
         )
         ";
 
@@ -255,22 +241,11 @@ impl Repo {
 
         let mut txn = conn.begin_with("BEGIN IMMEDIATE").await?;
 
-        let (max_attempts, max_visibility_seconds): (i64, i64) = sqlx::query_as(QUEUE_META_QUERY)
-            .bind(queue)
-            .fetch_one(&mut *txn)
-            .await?;
-
         sqlx::query(UNLOCK_LOCKED_TIMEOUT_QUERY)
-            .bind(queue)
-            .bind(max_visibility_seconds)
-            .bind(max_attempts)
             .execute(&mut *txn)
             .await?;
 
         sqlx::query(FAIL_LOCKED_TIMEOUT_QUERY)
-            .bind(queue)
-            .bind(max_visibility_seconds)
-            .bind(max_attempts)
             .execute(&mut *txn)
             .await?;
 

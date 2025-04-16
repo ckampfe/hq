@@ -14,6 +14,7 @@
 // - [x] receive job
 // - [x] mark job complete
 // - [ ] mark job as failed after N attempts
+// - [x] visibility timeout and failures
 // - [ ] figure out visibility timeout
 // - [ ] some web ui thing
 // - [ ] investigate queueing order: does updated_at make sense?

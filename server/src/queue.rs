@@ -3,7 +3,6 @@ use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::debug;
 
 pub async fn list(
     State(state): State<Arc<Mutex<AppState>>>,
@@ -42,7 +41,7 @@ pub async fn create(
             .into());
     }
 
-    let mut state = state.lock().await;
+    let state = state.lock().await;
 
     state
         .repo
@@ -63,28 +62,17 @@ pub async fn create(
             _ => AppError(e.into()).into_response(),
         })?;
 
-    let repo = state.repo.clone();
-
-    let name = create_queue.name.clone();
-
-    let unlock_handle = start_lock_task(repo, name);
-
-    state
-        .queue_lock_tasks
-        .insert(create_queue.name, unlock_handle);
-
     Ok(())
 }
 
-pub fn start_lock_task(repo: Repo, queue: String) -> tokio::task::JoinHandle<()> {
+pub fn start_lock_task(
+    repo: Repo,
+    tick: std::time::Duration,
+) -> tokio::task::JoinHandle<Result<(), sqlx::Error>> {
     tokio::spawn(async move {
-        debug!("started queue unlock/fail task for {}", &queue);
-
-        const ONE_SECOND: std::time::Duration = std::time::Duration::from_secs(1);
-
         loop {
-            tokio::time::sleep(ONE_SECOND).await;
-            let _ = repo.unlock_jobs_locked_longer_than_timeout(&queue).await;
+            tokio::time::sleep(tick).await;
+            repo.unlock_jobs_locked_longer_than_timeout().await?;
         }
     })
 }
