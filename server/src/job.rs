@@ -65,3 +65,14 @@ pub async fn complete(
 
     Ok(())
 }
+
+pub async fn fail(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Path(job_id): Path<Uuid>,
+) -> axum::response::Result<impl IntoResponse, AppError> {
+    let state = state.lock().await;
+
+    state.repo.fail_job(job_id).await?;
+
+    Ok(())
+}

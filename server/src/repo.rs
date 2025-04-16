@@ -99,7 +99,6 @@ impl Repo {
 
         let job: Option<Job> = sqlx::query_as(QUERY)
             .bind(queue)
-            // .bind(5)
             .fetch_optional(&mut *conn)
             .await?;
 
@@ -118,8 +117,29 @@ impl Repo {
         where id = ?
         and locked_at is not null
         and completed_at is null
-        returning
-            id
+        and failed_at is null
+        ";
+
+        let mut conn = self.pool.acquire().await?;
+
+        // TODO think about this,
+        // should we have a notion of "receipt handle"?
+        // https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_DeleteMessage.html
+        sqlx::query(QUERY).bind(job_id).execute(&mut *conn).await?;
+
+        Ok(())
+    }
+
+    pub async fn fail_job(&self, job_id: Uuid) -> anyhow::Result<()> {
+        const QUERY: &str = "
+        update hq_jobs
+        set
+            failed_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'),
+            locked_at = null
+        where id = ?
+        and locked_at is not null
+        and completed_at is null
+        and failed_at is null
         ";
 
         let mut conn = self.pool.acquire().await?;

@@ -75,9 +75,23 @@ impl Client {
 
     pub async fn complete_job(&self, job_id: Uuid) -> Result<(), reqwest::Error> {
         let mut url = self.url.clone();
+
         {
             let mut path_segments = url.path_segments_mut().unwrap();
             path_segments.extend(["jobs", &job_id.as_hyphenated().to_string(), "complete"]);
+        }
+
+        self.http_client.put(url).send().await?.error_for_status()?;
+
+        Ok(())
+    }
+
+    pub async fn fail_job(&self, job_id: Uuid) -> Result<(), reqwest::Error> {
+        let mut url = self.url.clone();
+
+        {
+            let mut path_segments = url.path_segments_mut().unwrap();
+            path_segments.extend(["jobs", &job_id.as_hyphenated().to_string(), "fail"]);
         }
 
         self.http_client.put(url).send().await?.error_for_status()?;
@@ -299,6 +313,42 @@ mod tests {
         let job_response: Job<SomeJob> = client.receive_job(&queue).await.unwrap().unwrap();
 
         client.complete_job(job_response.id).await.unwrap();
+
+        let job_response: Option<Job<SomeJob>> = client.receive_job(&queue).await.unwrap();
+
+        assert!(job_response.is_none());
+    }
+
+    #[tokio::test]
+    async fn fails_job() {
+        let (port, _server_handle) = serve().await;
+        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+
+        let queue = "some_queue".to_string();
+
+        client
+            .create_queue(CreateQueueRequest {
+                name: queue.clone(),
+                max_attempts: 5,
+                visibility_timeout_seconds: 30,
+            })
+            .await
+            .unwrap();
+
+        #[derive(Serialize, Deserialize, Debug)]
+        struct SomeJob {
+            foo: String,
+        }
+
+        let job = SomeJob {
+            foo: "bar".to_string(),
+        };
+
+        client.enqueue_job(&queue, &job).await.unwrap();
+
+        let job_response: Job<SomeJob> = client.receive_job(&queue).await.unwrap().unwrap();
+
+        client.fail_job(job_response.id).await.unwrap();
 
         let job_response: Option<Job<SomeJob>> = client.receive_job(&queue).await.unwrap();
 
