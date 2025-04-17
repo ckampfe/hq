@@ -3,7 +3,9 @@ use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing::instrument;
 
+#[instrument(skip(state))]
 pub async fn list(
     State(state): State<Arc<Mutex<AppState>>>,
 ) -> axum::response::Result<impl IntoResponse, AppError> {
@@ -14,13 +16,14 @@ pub async fn list(
     Ok(axum::Json(queues))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct CreateQueueRequest {
     name: String,
     max_attempts: i64,
     visibility_timeout_seconds: i64,
 }
 
+#[instrument(skip(state))]
 pub async fn create(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(create_queue): Json<CreateQueueRequest>,

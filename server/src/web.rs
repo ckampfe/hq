@@ -3,6 +3,7 @@ use axum::{Router, extract::State, response::IntoResponse, routing::get};
 use maud::html;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing::instrument;
 use uuid::Uuid;
 
 macro_rules! layout {
@@ -57,6 +58,7 @@ pub struct Job {
     failed_at: String,
 }
 
+#[instrument(skip(state))]
 async fn web_index(
     State(state): State<Arc<Mutex<AppState>>>,
 ) -> axum::response::Result<impl IntoResponse, AppError> {

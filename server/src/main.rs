@@ -29,11 +29,6 @@
 
 use clap::Parser;
 
-// async fn update_queue() -> axum::response::Result<impl IntoResponse, AppError> {
-//     todo!();
-//     Ok(())
-// }
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()

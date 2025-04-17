@@ -44,6 +44,7 @@ pub struct ReceiveResponse {
     job: Option<Job>,
 }
 
+#[instrument(skip(state))]
 pub async fn receive(
     State(state): State<Arc<Mutex<AppState>>>,
     queue_query: Query<QueueQuery>,
@@ -55,6 +56,7 @@ pub async fn receive(
     Ok(axum::Json(ReceiveResponse { job }))
 }
 
+#[instrument(skip(state))]
 pub async fn complete(
     State(state): State<Arc<Mutex<AppState>>>,
     Path(job_id): Path<Uuid>,
@@ -66,6 +68,7 @@ pub async fn complete(
     Ok(())
 }
 
+#[instrument(skip(state))]
 pub async fn fail(
     State(state): State<Arc<Mutex<AppState>>>,
     Path(job_id): Path<Uuid>,

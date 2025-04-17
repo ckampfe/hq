@@ -2,10 +2,12 @@ use std::str::FromStr;
 
 use serde::Serialize;
 use sqlx::{Connection, Sqlite};
+use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{job::Job, web};
 
+#[derive(Debug)]
 pub struct Options {
     pub db_name: String,
     pub in_memory: bool,
@@ -17,6 +19,7 @@ pub struct Repo {
 }
 
 impl Repo {
+    #[instrument]
     pub async fn new(options: Options) -> anyhow::Result<Repo> {
         let opts = sqlx::sqlite::SqliteConnectOptions::from_str(&options.db_name)?
             .busy_timeout(std::time::Duration::from_secs(5))
@@ -30,6 +33,7 @@ impl Repo {
         Ok(Repo { pool })
     }
 
+    #[instrument]
     pub async fn enqueue_job(&self, queue: &str, body: &str) -> anyhow::Result<Uuid> {
         const GET_QUEUE_ID_QUERY: &str = "
     select
@@ -68,6 +72,7 @@ impl Repo {
         Ok(job_id)
     }
 
+    #[instrument]
     pub async fn receive_job(&self, queue: &str) -> anyhow::Result<Option<Job>> {
         const QUERY: &str = "
         update hq_jobs
@@ -108,6 +113,7 @@ impl Repo {
         }))
     }
 
+    #[instrument]
     pub async fn complete_job(&self, job_id: Uuid) -> anyhow::Result<()> {
         const QUERY: &str = "
         update hq_jobs
@@ -130,6 +136,7 @@ impl Repo {
         Ok(())
     }
 
+    #[instrument]
     pub async fn fail_job(&self, job_id: Uuid) -> anyhow::Result<()> {
         const QUERY: &str = "
         update hq_jobs
@@ -152,6 +159,7 @@ impl Repo {
         Ok(())
     }
 
+    #[instrument]
     pub async fn jobs_sample(&self, limit: i64) -> sqlx::Result<Vec<web::Job>> {
         const QUERY: &str = "
         select
@@ -176,6 +184,7 @@ impl Repo {
             .await
     }
 
+    #[instrument]
     pub async fn create_queue(
         &self,
         name: &str,
@@ -201,6 +210,7 @@ impl Repo {
         Ok(())
     }
 
+    #[instrument]
     pub async fn get_queues(&self) -> sqlx::Result<Vec<Queue>> {
         const QUERY: &str = "
         select
@@ -215,6 +225,7 @@ impl Repo {
         sqlx::query_as(QUERY).fetch_all(&mut *conn).await
     }
 
+    #[instrument]
     pub(crate) async fn unlock_jobs_locked_longer_than_timeout(&self) -> sqlx::Result<()> {
         // unlock queries that have been locked
         // for longer than timeout and have attempts <= allowed
@@ -274,6 +285,7 @@ impl Repo {
         Ok(())
     }
 
+    #[instrument]
     pub async fn migrate(&self) -> anyhow::Result<()> {
         const QUERY: &str = "
         create table if not exists hq_queues (
