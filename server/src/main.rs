@@ -13,9 +13,9 @@
 // - [x] enqueue job
 // - [x] receive job
 // - [x] mark job complete
-// - [ ] mark job as failed after N attempts
+// - [x] mark job as failed after N attempts
 // - [x] visibility timeout and failures
-// - [ ] figure out visibility timeout
+// - [x] figure out visibility timeout
 // - [ ] some web ui thing
 // - [ ] investigate queueing order: does updated_at make sense?
 //       it would send jobs to the back of the queue in the event that they fail,
