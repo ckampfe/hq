@@ -49,7 +49,7 @@ macro_rules! layout {
 pub struct Job {
     id: Vec<u8>,
     args: String,
-    queue: String,
+    queue_name: String,
     attempts: i64,
     inserted_at: String,
     updated_at: String,
@@ -79,24 +79,24 @@ async fn web_index(
                         th { "args" }
                         th { "attempts" }
                         th { "inserted_at" }
-                        th { "updated_at" }
                         th { "locked_at" }
                         th { "completed_at" }
                         th { "failed_at" }
+                        th { "updated_at" }
                     }
                 }
                 tbody {
                     @for job in jobs_sample {
                         tr {
-                            td { (job.queue) }
+                            td { (job.queue_name) }
                             td { (Uuid::from_bytes(job.id.try_into().unwrap())) }
                             td { (job.args) }
                             td { (job.attempts) }
                             td { (job.inserted_at) }
-                            td { (job.updated_at) }
                             td { (job.locked_at) }
                             td { (job.completed_at) }
                             td { (job.failed_at) }
+                            td { (job.updated_at) }
                         }
                     }
                 }

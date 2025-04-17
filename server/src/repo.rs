@@ -79,7 +79,7 @@ impl Repo {
         set
             attempts = attempts + 1,
             locked_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
-        where id in (
+        where id = (
             select
                 hq_jobs.id
             from hq_jobs
@@ -163,17 +163,24 @@ impl Repo {
     pub async fn jobs_sample(&self, limit: i64) -> sqlx::Result<Vec<web::Job>> {
         const QUERY: &str = "
         select
-            id,
-            args,
-            queue,
-            attempts,
-            inserted_at,
-            updated_at,
-            locked_at,
-            completed_at,
-            failed_at
+            hq_jobs.id,
+            hq_jobs.args,
+            hq_queues.name as queue_name,
+            hq_jobs.attempts,
+            hq_jobs.inserted_at,
+            hq_jobs.updated_at,
+            hq_jobs.locked_at,
+            hq_jobs.completed_at,
+            hq_jobs.failed_at
         from hq_jobs
-        order by inserted_at desc
+        inner join hq_queues
+            on hq_queues.id = hq_jobs.queue_id
+        order by 
+            hq_jobs.updated_at desc,
+            hq_jobs.inserted_at desc,
+            hq_jobs.locked_at desc,
+            hq_jobs.completed_at desc,
+            hq_jobs.failed_at desc
         limit ?;
         ";
         let mut conn = self.pool.acquire().await.unwrap();
