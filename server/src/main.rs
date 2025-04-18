@@ -3,6 +3,7 @@
 //
 // - [ ] curl/shell client
 // - [ ] rust client
+// - [ ] set up tracing
 //
 // queues
 // - [x] create
@@ -10,6 +11,7 @@
 // - [x] get/show
 // - [x] update
 // - [ ] delete (and all jobs)
+// - [ ] use query params for most stuff instead of json bodies
 // jobs
 // - [x] enqueue job
 // - [x] receive job

@@ -257,6 +257,7 @@ impl Repo {
         Ok(())
     }
 
+    #[instrument]
     pub(crate) async fn get_queue(
         &self,
         queue: String,

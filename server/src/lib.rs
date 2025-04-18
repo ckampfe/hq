@@ -3,7 +3,6 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use clap::Parser;
-use queue::start_lock_task;
 use repo::Repo;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -53,7 +52,7 @@ pub async fn app(options: Options) -> anyhow::Result<Router> {
 
     // TODO start a supervisor task to watch this task,
     // and restart it if it fails
-    start_lock_task(repo.clone(), std::time::Duration::from_secs(1));
+    queue::start_lock_task(repo.clone(), std::time::Duration::from_secs(1));
 
     let state = AppState {
         repo,
@@ -63,16 +62,14 @@ pub async fn app(options: Options) -> anyhow::Result<Router> {
     let state = Arc::new(Mutex::new(state));
 
     let queue_routes = Router::new()
-        .route("/jobs/enqueue", post(job::enqueue))
-        .route("/jobs/receive", get(job::receive))
-        .route("/jobs/{id}/complete", put(job::complete))
-        .route("/jobs/{id}/fail", put(job::fail))
+        .route("/queues/{name}/enqueue", post(queue::enqueue))
+        .route("/queues/{name}/receive", get(queue::receive))
         .route("/queues/{name}", get(queue::show))
         .route("/queues/{name}", put(queue::update))
         .route("/queues", get(queue::list))
         .route("/queues", post(queue::create))
-        // .route("/queues/{id}", put(update_queue))
-        ;
+        .route("/jobs/{id}/complete", put(job::complete))
+        .route("/jobs/{id}/fail", put(job::fail));
 
     let router = Router::new();
 

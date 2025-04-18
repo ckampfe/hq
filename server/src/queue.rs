@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::{ops::Deref, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::instrument;
+use uuid::Uuid;
 
 #[instrument(skip(state))]
 pub async fn list(
@@ -31,7 +32,7 @@ pub struct CreateQueueRequest {
 #[instrument(skip(state))]
 pub async fn create(
     State(state): State<Arc<Mutex<AppState>>>,
-    Json(create_queue): Json<CreateQueueRequest>,
+    create_queue: Query<CreateQueueRequest>,
 ) -> axum::response::Result<impl IntoResponse> {
     if create_queue.max_attempts < 1 {
         return Err((
@@ -149,6 +150,37 @@ pub async fn update(
     Ok(())
 }
 
+#[derive(Serialize)]
+pub struct EnqueueResponse {
+    job_id: Uuid,
+}
+
+#[instrument(skip(state))]
+pub async fn enqueue(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Path(queue): Path<String>,
+    body: String,
+) -> axum::response::Result<Json<EnqueueResponse>, AppError> {
+    let state = state.lock().await;
+
+    let job_id = state.repo.enqueue_job(&queue, &body).await?;
+
+    Ok(axum::Json(EnqueueResponse { job_id }))
+}
+
+#[instrument(skip(state))]
+pub async fn receive(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Path(queue): Path<String>,
+) -> axum::response::Result<Json<Option<crate::job::Job>>, AppError> {
+    let state = state.lock().await;
+
+    let job = state.repo.receive_job(&queue).await?;
+
+    Ok(axum::Json(job))
+}
+
+#[instrument]
 pub fn start_lock_task(
     repo: Repo,
     tick: std::time::Duration,

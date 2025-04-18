@@ -36,11 +36,13 @@ impl Client {
     ) -> Result<EnqueueResponse, reqwest::Error> {
         let mut url = self.url.clone();
 
-        url.set_path("jobs/enqueue");
+        {
+            let mut path_segments = url.path_segments_mut().unwrap();
+            path_segments.extend(["queues", queue, "enqueue"]);
+        }
 
         self.http_client
             .post(url)
-            .query(&[("queue", queue)])
             .json(job_params)
             .send()
             .await?
@@ -55,23 +57,21 @@ impl Client {
     ) -> Result<Option<Job<T>>, reqwest::Error> {
         let mut url = self.url.clone();
 
-        url.set_path("jobs/receive");
+        {
+            let mut path_segments = url.path_segments_mut().unwrap();
+            path_segments.extend(["queues", queue, "receive"]);
+        }
 
-        let response: TryReceiveResponse<T> = self
+        let job: Option<Job<T>> = self
             .http_client
             .get(url)
-            .query(&[("queue", queue)])
             .send()
             .await?
             .error_for_status()?
             .json()
             .await?;
 
-        if let Some(job) = response.job {
-            Ok(Some(job))
-        } else {
-            Ok(None)
-        }
+        Ok(job)
     }
 
     pub async fn complete_job(&self, job_id: Uuid) -> Result<(), reqwest::Error> {
@@ -119,9 +119,21 @@ impl Client {
 
         url.set_path("queues");
 
+        let mut qp = url.query_pairs_mut();
+
+        qp.append_pair("name", &queue.name);
+
+        qp.append_pair("max_attempts", &queue.max_attempts.to_string());
+
+        qp.append_pair(
+            "visibility_timeout_seconds",
+            &queue.visibility_timeout_seconds.to_string(),
+        );
+
+        let url: reqwest::Url = qp.finish().to_owned();
+
         self.http_client
             .post(url)
-            .json(&queue)
             .send()
             .await?
             .error_for_status()?;
@@ -198,11 +210,6 @@ pub struct Job<T> {
     pub args: T,
     pub queue: String,
     pub attempts: i64,
-}
-
-#[derive(Deserialize)]
-pub struct TryReceiveResponse<T> {
-    job: Option<Job<T>>,
 }
 
 #[derive(Deserialize)]
