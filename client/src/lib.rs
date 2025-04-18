@@ -20,14 +20,13 @@ impl Default for ClientOptions {
 }
 
 impl Client {
-    pub fn new(url: impl reqwest::IntoUrl, options: ClientOptions) -> Self {
-        Self {
+    pub fn new(url: impl reqwest::IntoUrl, options: ClientOptions) -> Result<Self, reqwest::Error> {
+        Ok(Self {
             url: url.into_url().unwrap(),
             http_client: reqwest::Client::builder()
                 .timeout(options.request_timeout)
-                .build()
-                .unwrap(),
-        }
+                .build()?,
+        })
     }
 
     pub async fn enqueue_job<T: Serialize>(
@@ -234,7 +233,8 @@ mod tests {
     #[tokio::test]
     async fn creates_queue() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
             .create_queue(CreateQueueRequest {
@@ -249,7 +249,8 @@ mod tests {
     #[tokio::test]
     async fn lists_queues_with_queues() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         let queue_name = "some_queue".to_string();
         let max_attempts = 5;
@@ -272,7 +273,8 @@ mod tests {
     #[tokio::test]
     async fn lists_queues_no_queues() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         let queues = client.list_queues().await.unwrap();
 
@@ -282,7 +284,8 @@ mod tests {
     #[tokio::test]
     async fn get_queue_none() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         let q: Option<Queue> = client.get_queue("some_queue").await.unwrap();
 
@@ -292,7 +295,8 @@ mod tests {
     #[tokio::test]
     async fn get_queue_some() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
             .create_queue(CreateQueueRequest {
@@ -313,7 +317,8 @@ mod tests {
     #[tokio::test]
     async fn updates_queue_max_attempts() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
             .create_queue(CreateQueueRequest {
@@ -349,7 +354,8 @@ mod tests {
     #[tokio::test]
     async fn updates_queue_max_visibility_timeout() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
             .create_queue(CreateQueueRequest {
@@ -385,7 +391,8 @@ mod tests {
     #[tokio::test]
     async fn updates_queue_none() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
             .create_queue(CreateQueueRequest {
@@ -421,7 +428,8 @@ mod tests {
     #[tokio::test]
     async fn enqueues_job() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
             .create_queue(CreateQueueRequest {
@@ -441,7 +449,8 @@ mod tests {
     #[tokio::test]
     async fn receive_no_job() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         let queue = "some_queue".to_string();
 
@@ -467,7 +476,8 @@ mod tests {
     #[tokio::test]
     async fn receive_with_job() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         let queue = "some_queue".to_string();
 
@@ -500,7 +510,8 @@ mod tests {
     #[tokio::test]
     async fn completes_uncompleted_job() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         let queue = "some_queue".to_string();
 
@@ -536,7 +547,8 @@ mod tests {
     #[tokio::test]
     async fn fails_job() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         let queue = "some_queue".to_string();
 
@@ -572,7 +584,8 @@ mod tests {
     #[tokio::test]
     async fn visibility_timeout_unlocks_locked_job_and_respects_max_attempts() {
         let (port, _server_handle) = serve().await;
-        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         let queue = "some_queue".to_string();
 
