@@ -7,7 +7,8 @@
 // queues
 // - [x] create
 // - [x] list
-// - [ ] update
+// - [x] get/show
+// - [x] update
 // - [ ] delete (and all jobs)
 // jobs
 // - [x] enqueue job

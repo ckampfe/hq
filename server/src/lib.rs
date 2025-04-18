@@ -67,6 +67,8 @@ pub async fn app(options: Options) -> anyhow::Result<Router> {
         .route("/jobs/receive", get(job::receive))
         .route("/jobs/{id}/complete", put(job::complete))
         .route("/jobs/{id}/fail", put(job::fail))
+        .route("/queues/{name}", get(queue::show))
+        .route("/queues/{name}", put(queue::update))
         .route("/queues", get(queue::list))
         .route("/queues", post(queue::create))
         // .route("/queues/{id}", put(update_queue))

@@ -45,6 +45,7 @@ impl Client {
             .json(job_params)
             .send()
             .await?
+            .error_for_status()?
             .json()
             .await
     }
@@ -63,6 +64,7 @@ impl Client {
             .query(&[("queue", queue)])
             .send()
             .await?
+            .error_for_status()?
             .json()
             .await?;
 
@@ -104,7 +106,13 @@ impl Client {
 
         url.set_path("queues");
 
-        self.http_client.get(url).send().await?.json().await
+        self.http_client
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await
     }
 
     pub async fn create_queue(&self, queue: CreateQueueRequest) -> Result<(), reqwest::Error> {
@@ -112,10 +120,77 @@ impl Client {
 
         url.set_path("queues");
 
-        self.http_client.post(url).json(&queue).send().await?;
+        self.http_client
+            .post(url)
+            .json(&queue)
+            .send()
+            .await?
+            .error_for_status()?;
 
         Ok(())
     }
+
+    pub async fn get_queue(&self, queue: &str) -> Result<Option<Queue>, reqwest::Error> {
+        let mut url = self.url.clone();
+
+        {
+            let mut path_segments = url.path_segments_mut().unwrap();
+            path_segments.extend(["queues", queue]);
+        }
+
+        let queue: Option<Queue> = self
+            .http_client
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+
+        Ok(queue)
+    }
+
+    pub async fn update_queue(
+        &self,
+        queue: &str,
+        params: UpdateQueueRequest,
+    ) -> Result<(), reqwest::Error> {
+        let mut url = self.url.clone();
+
+        {
+            let mut path_segments = url.path_segments_mut().unwrap();
+            path_segments.extend(["queues", queue]);
+        }
+
+        let mut qp = url.query_pairs_mut();
+
+        if let Some(max_attempts) = params.max_attempts {
+            qp.append_pair("max_attempts", &max_attempts.to_string());
+        }
+
+        if let Some(vts) = params.visibility_timeout_seconds {
+            qp.append_pair("visibility_timeout_seconds", &vts.to_string());
+        }
+
+        let url: reqwest::Url = qp.finish().to_owned();
+
+        self.http_client.put(url).send().await?.error_for_status()?;
+
+        Ok(())
+    }
+}
+
+#[derive(Deserialize)]
+pub struct Queue {
+    pub name: String,
+    pub max_attempts: i64,
+    pub visibility_timeout_seconds: i64,
+}
+
+#[derive(Serialize)]
+pub struct UpdateQueueRequest {
+    max_attempts: Option<i64>,
+    visibility_timeout_seconds: Option<i64>,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -202,6 +277,145 @@ mod tests {
         let queues = client.list_queues().await.unwrap();
 
         assert!(queues.is_empty())
+    }
+
+    #[tokio::test]
+    async fn get_queue_none() {
+        let (port, _server_handle) = serve().await;
+        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+
+        let q: Option<Queue> = client.get_queue("some_queue").await.unwrap();
+
+        assert!(q.is_none())
+    }
+
+    #[tokio::test]
+    async fn get_queue_some() {
+        let (port, _server_handle) = serve().await;
+        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+
+        client
+            .create_queue(CreateQueueRequest {
+                name: "some_queue".to_string(),
+                max_attempts: 5,
+                visibility_timeout_seconds: 30,
+            })
+            .await
+            .unwrap();
+
+        let q = client.get_queue("some_queue").await.unwrap().unwrap();
+
+        assert_eq!(q.name, "some_queue");
+        assert_eq!(q.max_attempts, 5);
+        assert_eq!(q.visibility_timeout_seconds, 30);
+    }
+
+    #[tokio::test]
+    async fn updates_queue_max_attempts() {
+        let (port, _server_handle) = serve().await;
+        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+
+        client
+            .create_queue(CreateQueueRequest {
+                name: "some_queue".to_string(),
+                max_attempts: 5,
+                visibility_timeout_seconds: 30,
+            })
+            .await
+            .unwrap();
+
+        let q = client.get_queue("some_queue").await.unwrap().unwrap();
+        assert_eq!(q.name, "some_queue");
+        assert_eq!(q.max_attempts, 5);
+        assert_eq!(q.visibility_timeout_seconds, 30);
+
+        client
+            .update_queue(
+                "some_queue",
+                UpdateQueueRequest {
+                    max_attempts: Some(6),
+                    visibility_timeout_seconds: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let q = client.get_queue("some_queue").await.unwrap().unwrap();
+        assert_eq!(q.name, "some_queue");
+        assert_eq!(q.max_attempts, 6);
+        assert_eq!(q.visibility_timeout_seconds, 30);
+    }
+
+    #[tokio::test]
+    async fn updates_queue_max_visibility_timeout() {
+        let (port, _server_handle) = serve().await;
+        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+
+        client
+            .create_queue(CreateQueueRequest {
+                name: "some_queue".to_string(),
+                max_attempts: 5,
+                visibility_timeout_seconds: 30,
+            })
+            .await
+            .unwrap();
+
+        let q = client.get_queue("some_queue").await.unwrap().unwrap();
+        assert_eq!(q.name, "some_queue");
+        assert_eq!(q.max_attempts, 5);
+        assert_eq!(q.visibility_timeout_seconds, 30);
+
+        client
+            .update_queue(
+                "some_queue",
+                UpdateQueueRequest {
+                    max_attempts: None,
+                    visibility_timeout_seconds: Some(10),
+                },
+            )
+            .await
+            .unwrap();
+
+        let q = client.get_queue("some_queue").await.unwrap().unwrap();
+        assert_eq!(q.name, "some_queue");
+        assert_eq!(q.max_attempts, 5);
+        assert_eq!(q.visibility_timeout_seconds, 10);
+    }
+
+    #[tokio::test]
+    async fn updates_queue_none() {
+        let (port, _server_handle) = serve().await;
+        let client = Client::new(format!("http://localhost:{port}"), ClientOptions::default());
+
+        client
+            .create_queue(CreateQueueRequest {
+                name: "some_queue".to_string(),
+                max_attempts: 5,
+                visibility_timeout_seconds: 30,
+            })
+            .await
+            .unwrap();
+
+        let q = client.get_queue("some_queue").await.unwrap().unwrap();
+        assert_eq!(q.name, "some_queue");
+        assert_eq!(q.max_attempts, 5);
+        assert_eq!(q.visibility_timeout_seconds, 30);
+
+        client
+            .update_queue(
+                "some_queue",
+                UpdateQueueRequest {
+                    max_attempts: None,
+                    visibility_timeout_seconds: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let q = client.get_queue("some_queue").await.unwrap().unwrap();
+        assert_eq!(q.name, "some_queue");
+        assert_eq!(q.max_attempts, 5);
+        assert_eq!(q.visibility_timeout_seconds, 30);
     }
 
     #[tokio::test]
@@ -397,8 +611,6 @@ mod tests {
         assert_eq!(job_response2.attempts, 2);
         assert!(job_response3.is_none())
     }
-
-    // async fn fails_job() {}
 
     async fn serve() -> (u16, ServerHandle) {
         static PORT: AtomicU16 = AtomicU16::new(10000);

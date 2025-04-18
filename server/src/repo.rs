@@ -5,7 +5,7 @@ use sqlx::{Connection, Sqlite};
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::{job::Job, web};
+use crate::{job::Job, queue, web};
 
 #[derive(Debug)]
 pub struct Options {
@@ -215,6 +215,68 @@ impl Repo {
             .await?;
 
         Ok(())
+    }
+
+    #[instrument]
+    pub async fn update_queue(
+        &self,
+        name: &str,
+        update_queue_params: &crate::queue::UpdateQueueRequest,
+    ) -> sqlx::Result<()> {
+        if update_queue_params.is_some() {
+            let mut query = "update hq_queues set\n".to_string();
+
+            if update_queue_params.max_attempts.is_some() {
+                query.push_str("max_attempts = ?\n")
+            }
+
+            if update_queue_params.visibility_timeout_seconds.is_some() {
+                query.push_str("visibility_timeout_seconds = ?\n")
+            }
+
+            query.push_str("where name = ?");
+
+            let mut conn = self.pool.acquire().await?;
+
+            let mut q = sqlx::query(&query);
+
+            if let Some(max_attempts) = update_queue_params.max_attempts {
+                q = q.bind(max_attempts);
+            }
+
+            if let Some(visibility_timeout_seconds) = update_queue_params.visibility_timeout_seconds
+            {
+                q = q.bind(visibility_timeout_seconds);
+            }
+
+            q = q.bind(name);
+
+            q.execute(&mut *conn).await?;
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn get_queue(
+        &self,
+        queue: String,
+    ) -> Result<Option<queue::ShowQueueResponse>, sqlx::Error> {
+        const QUERY: &str = "
+        select
+            name,
+            max_attempts,
+            visibility_timeout_seconds
+        from hq_queues
+        where name = ?
+        limit 1
+        ";
+
+        let mut conn = self.pool.acquire().await?;
+
+        sqlx::query_as(QUERY)
+            .bind(queue)
+            .fetch_optional(&mut *conn)
+            .await
     }
 
     #[instrument]
