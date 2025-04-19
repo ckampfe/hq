@@ -189,6 +189,23 @@ impl Client {
 
         Ok(())
     }
+
+    pub async fn delete_queue(&self, queue: &str) -> Result<(), reqwest::Error> {
+        let mut url = self.url.clone();
+
+        {
+            let mut path_segments = url.path_segments_mut().unwrap();
+            path_segments.extend(["queues", queue]);
+        }
+
+        self.http_client
+            .delete(url)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
 }
 
 #[derive(Deserialize)]
@@ -433,6 +450,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn delete_queue_none() {
+        let (port, _server_handle) = serve().await;
+
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+
+        client.delete_queue("some_queue").await.unwrap();
+
+        assert!(client.list_queues().await.unwrap().is_empty())
+    }
+
+    #[tokio::test]
+    async fn delete_queue_some() {
+        let (port, _server_handle) = serve().await;
+        let client =
+            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+
+        client
+            .create_queue(CreateQueueRequest {
+                name: "some_queue".to_string(),
+                max_attempts: 5,
+                visibility_timeout_seconds: 30,
+            })
+            .await
+            .unwrap();
+
+        assert!(!client.list_queues().await.unwrap().is_empty());
+
+        client.delete_queue("some_queue").await.unwrap();
+
+        assert!(client.list_queues().await.unwrap().is_empty())
+    }
+
+    #[tokio::test]
     async fn enqueues_job() {
         let (port, _server_handle) = serve().await;
         let client =
@@ -648,7 +699,7 @@ mod tests {
 
         let router = server::app(options).await.unwrap();
 
-        let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
+        let listener = tokio::net::TcpListener::bind(("localhost", port))
             .await
             .unwrap();
 

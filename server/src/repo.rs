@@ -257,6 +257,19 @@ impl Repo {
         Ok(())
     }
 
+    pub async fn delete_queue(&self, name: &str) -> sqlx::Result<()> {
+        const QUERY: &str = "
+        delete from hq_queues
+        where name = ?
+        ";
+
+        let mut conn = self.pool.acquire().await?;
+
+        sqlx::query(QUERY).bind(name).execute(&mut *conn).await?;
+
+        Ok(())
+    }
+
     #[instrument]
     pub(crate) async fn get_queue(
         &self,
@@ -386,7 +399,7 @@ impl Repo {
             completed_at datetime,
             failed_at datetime,
 
-            foreign key(queue_id) references hq_queues(id)
+            foreign key(queue_id) references hq_queues(id) on delete cascade
         );
 
         create trigger if not exists hq_jobs_updated_at after update on hq_jobs

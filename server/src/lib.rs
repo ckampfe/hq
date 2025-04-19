@@ -1,7 +1,7 @@
 use axum::Router;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post, put};
+use axum::routing::{delete, get, post, put};
 use clap::Parser;
 use repo::Repo;
 use std::sync::Arc;
@@ -66,6 +66,7 @@ pub async fn app(options: Options) -> anyhow::Result<Router> {
         .route("/queues/{name}/receive", get(queue::receive))
         .route("/queues/{name}", get(queue::show))
         .route("/queues/{name}", put(queue::update))
+        .route("/queues/{name}", delete(queue::delete))
         .route("/queues", get(queue::list))
         .route("/queues", post(queue::create))
         .route("/jobs/{id}/complete", put(job::complete))

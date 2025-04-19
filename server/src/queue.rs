@@ -150,6 +150,16 @@ pub async fn update(
     Ok(())
 }
 
+pub async fn delete(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Path(queue_name): Path<String>,
+) -> axum::response::Result<(), AppError> {
+    let state = state.lock().await;
+
+    state.repo.delete_queue(&queue_name).await?;
+
+    Ok(())
+}
 #[derive(Serialize)]
 pub struct EnqueueResponse {
     job_id: Uuid,
