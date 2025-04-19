@@ -257,6 +257,7 @@ impl Repo {
         Ok(())
     }
 
+    #[instrument]
     pub async fn delete_queue(&self, name: &str) -> sqlx::Result<()> {
         const QUERY: &str = "
         delete from hq_queues

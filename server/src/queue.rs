@@ -1,12 +1,12 @@
-use crate::{AppError, AppState, repo::Repo};
-use axum::{
-    Json,
-    extract::{Path, Query, State},
-    http::StatusCode,
-    response::IntoResponse,
-};
+use crate::repo::Repo;
+use crate::{AppError, AppState};
+use axum::Json;
+use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
-use std::{ops::Deref, sync::Arc};
+use std::ops::Deref;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::instrument;
 use uuid::Uuid;
@@ -81,6 +81,7 @@ pub struct ShowQueueResponse {
     visibility_timeout_seconds: i64,
 }
 
+#[instrument(skip(state))]
 pub async fn show(
     State(state): State<Arc<Mutex<AppState>>>,
     Path(queue): Path<String>,
@@ -150,6 +151,7 @@ pub async fn update(
     Ok(())
 }
 
+#[instrument(skip(state))]
 pub async fn delete(
     State(state): State<Arc<Mutex<AppState>>>,
     Path(queue_name): Path<String>,
@@ -160,6 +162,7 @@ pub async fn delete(
 
     Ok(())
 }
+
 #[derive(Serialize)]
 pub struct EnqueueResponse {
     job_id: Uuid,
