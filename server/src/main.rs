@@ -20,9 +20,11 @@
 // - [x] visibility timeout and failures
 // - [x] figure out visibility timeout
 // - [ ] some web ui thing
-// - [ ] investigate queueing order: does updated_at make sense?
+// - [x] investigate queueing order: does updated_at make sense?
 //       it would send jobs to the back of the queue in the event that they fail,
 //       does this matter? should we retry jobs consecutively?
+// - [ ] job pruning strategy
+// - [ ] "make visible on timeout" configurable?
 //
 // for visibility timeout, mark on job "visible_at", and on subsequent receives,
 // check if visible_at <= now, and completed_at is null.
