@@ -311,18 +311,6 @@ impl Repo {
 
     #[instrument]
     pub(crate) async fn unlock_jobs_locked_longer_than_timeout(&self) -> sqlx::Result<()> {
-        // const AGE_QUERY: &str = "
-        // select
-        //     hq_jobs.id,
-        //     (julianday(current_timestamp) - julianday(hq_jobs.locked_at)) * 86400.0,
-        //     cast((julianday(current_timestamp) - julianday(locked_at)) * 86400.0 as integer),
-        //     ((julianday(current_timestamp) - julianday(locked_at)) * 86400.0) > cast(hq_queues.visibility_timeout_seconds as real)
-        // from hq_jobs
-        // inner join hq_queues
-        //     on hq_queues.id = hq_jobs.queue_id
-        // where locked_at is not null;
-        // ";
-
         // unlock queries that have been locked
         // for longer than timeout and have attempts <= allowed
         const UNLOCK_LOCKED_TIMEOUT_QUERY: &str = "
@@ -367,22 +355,6 @@ impl Repo {
         let mut conn = self.pool.acquire().await?;
 
         let mut txn = conn.begin_with("BEGIN IMMEDIATE").await?;
-
-        // let out: Result<Vec<(Uuid, f64, i64, bool)>, sqlx::Error> =
-        //     sqlx::query_as(AGE_QUERY).fetch_all(&mut *txn).await;
-
-        // if let Ok(out) = out {
-        //     println!("post out");
-
-        //     for o in out {
-        //         println!(
-        //             "id {}, agef {}, agei {}, nocast comparison: {}",
-        //             o.0, o.1, o.2, o.3
-        //         );
-        //     }
-        // } else {
-        //     println!("{:?}", out);
-        // }
 
         sqlx::query(UNLOCK_LOCKED_TIMEOUT_QUERY)
             .execute(&mut *txn)
