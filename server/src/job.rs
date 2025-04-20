@@ -1,6 +1,5 @@
 use crate::{AppError, AppState};
 use axum::extract::{Path, State};
-use axum::response::IntoResponse;
 use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -19,7 +18,7 @@ pub struct Job {
 pub async fn complete(
     State(state): State<Arc<Mutex<AppState>>>,
     Path(job_id): Path<Uuid>,
-) -> axum::response::Result<impl IntoResponse, AppError> {
+) -> axum::response::Result<(), AppError> {
     let state = state.lock().await;
 
     state.repo.complete_job(job_id).await?;
@@ -31,7 +30,7 @@ pub async fn complete(
 pub async fn fail(
     State(state): State<Arc<Mutex<AppState>>>,
     Path(job_id): Path<Uuid>,
-) -> axum::response::Result<impl IntoResponse, AppError> {
+) -> axum::response::Result<(), AppError> {
     let state = state.lock().await;
 
     state.repo.fail_job(job_id).await?;

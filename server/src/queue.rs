@@ -14,12 +14,12 @@ use uuid::Uuid;
 #[instrument(skip(state))]
 pub async fn list(
     State(state): State<Arc<Mutex<AppState>>>,
-) -> axum::response::Result<impl IntoResponse, AppError> {
+) -> axum::response::Result<Json<Vec<crate::repo::Queue>>, AppError> {
     let state = state.lock().await;
 
     let queues = state.repo.get_queues().await?;
 
-    Ok(axum::Json(queues))
+    Ok(Json(queues))
 }
 
 #[derive(Deserialize, Debug)]
@@ -33,7 +33,7 @@ pub struct CreateQueueRequest {
 pub async fn create(
     State(state): State<Arc<Mutex<AppState>>>,
     create_queue: Query<CreateQueueRequest>,
-) -> axum::response::Result<impl IntoResponse> {
+) -> axum::response::Result<()> {
     if create_queue.max_attempts < 1 {
         return Err((
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -90,7 +90,7 @@ pub async fn show(
 
     let queue = state.repo.get_queue(queue).await?;
 
-    Ok(axum::Json(queue))
+    Ok(Json(queue))
 }
 
 #[derive(Deserialize, Debug)]
@@ -110,7 +110,7 @@ pub async fn update(
     State(state): State<Arc<Mutex<AppState>>>,
     Path(queue_name): Path<String>,
     update_queue: Query<UpdateQueueRequest>,
-) -> axum::response::Result<impl IntoResponse> {
+) -> axum::response::Result<()> {
     if let Some(max_attempts) = update_queue.max_attempts {
         if max_attempts < 1 {
             return Err((
@@ -178,7 +178,7 @@ pub async fn enqueue(
 
     let job_id = state.repo.enqueue_job(&queue, &body).await?;
 
-    Ok(axum::Json(EnqueueResponse { job_id }))
+    Ok(Json(EnqueueResponse { job_id }))
 }
 
 #[instrument(skip(state))]
@@ -190,7 +190,7 @@ pub async fn receive(
 
     let job = state.repo.receive_job(&queue).await?;
 
-    Ok(axum::Json(job))
+    Ok(Json(job))
 }
 
 #[instrument]
