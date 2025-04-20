@@ -8,6 +8,7 @@
 // - [ ] where to keep db files
 // - [ ] job pruning strategy
 // - [ ] some web ui thing
+// - [ ] initial readme
 // queues
 // - [x] create
 // - [x] list
