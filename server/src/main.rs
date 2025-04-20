@@ -1,10 +1,13 @@
 #![forbid(unsafe_code)]
 // todo
-//
+
+// misc
 // - [ ] curl/shell client
 // - [ ] rust client
 // - [ ] set up tracing
-//
+// - [ ] where to keep db files
+// - [ ] job pruning strategy
+// - [ ] some web ui thing
 // queues
 // - [x] create
 // - [x] list
@@ -19,11 +22,9 @@
 // - [x] mark job as failed after N attempts
 // - [x] visibility timeout and failures
 // - [x] figure out visibility timeout
-// - [ ] some web ui thing
 // - [x] investigate queueing order: does updated_at make sense?
 //       it would send jobs to the back of the queue in the event that they fail,
 //       does this matter? should we retry jobs consecutively?
-// - [ ] job pruning strategy
 // - [ ] "make visible on timeout" configurable?
 //
 // for visibility timeout, mark on job "visible_at", and on subsequent receives,
