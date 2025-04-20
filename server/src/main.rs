@@ -22,6 +22,7 @@
 // - [x] mark job complete
 // - [x] mark job as failed after N attempts
 // - [x] visibility timeout and failures
+// - [x] do visibility timeout as float comparison (1.3s > 1.0s, etc)
 // - [x] figure out visibility timeout
 // - [x] investigate queueing order: does updated_at make sense?
 //       it would send jobs to the back of the queue in the event that they fail,
