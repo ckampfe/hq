@@ -200,8 +200,8 @@ pub fn start_lock_task(
 ) -> tokio::task::JoinHandle<Result<(), sqlx::Error>> {
     tokio::spawn(async move {
         loop {
-            tokio::time::sleep(tick).await;
             repo.unlock_jobs_locked_longer_than_timeout().await?;
+            tokio::time::sleep(tick).await;
         }
     })
 }

@@ -651,7 +651,7 @@ mod tests {
             .create_queue(CreateQueueRequest {
                 name: queue.clone(),
                 max_attempts: 2,
-                visibility_timeout_seconds: 2,
+                visibility_timeout_seconds: 1,
             })
             .await
             .unwrap();
@@ -669,18 +669,18 @@ mod tests {
 
         let job_response1: Job<SomeJob> = client.receive_job(&queue).await.unwrap().unwrap();
 
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
         let job_response2: Job<SomeJob> = client.receive_job(&queue).await.unwrap().unwrap();
 
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
         let job_response3: Option<Job<SomeJob>> = client.receive_job(&queue).await.unwrap();
 
         assert_eq!(job_response1.id, job_response2.id);
         assert_eq!(job_response1.attempts, 1);
         assert_eq!(job_response2.attempts, 2);
-        assert!(job_response3.is_none())
+        assert!(job_response3.is_none());
     }
 
     async fn serve() -> (u16, ServerHandle) {
