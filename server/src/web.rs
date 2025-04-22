@@ -46,7 +46,7 @@ macro_rules! layout {
 }
 
 #[derive(sqlx::FromRow, Debug)]
-pub struct Job {
+pub struct Message {
     id: Vec<u8>,
     args: String,
     queue_name: String,
@@ -64,7 +64,7 @@ async fn web_index(
 ) -> axum::response::Result<impl IntoResponse, AppError> {
     let state = state.lock().await;
 
-    let jobs_sample = state.repo.jobs_sample(10).await?;
+    let messages_sample = state.repo.messages_sample(10).await?;
 
     Ok(layout! {
         html! {
@@ -86,17 +86,17 @@ async fn web_index(
                     }
                 }
                 tbody {
-                    @for job in jobs_sample {
+                    @for message in messages_sample {
                         tr {
-                            td { (job.queue_name) }
-                            td { (Uuid::from_bytes(job.id.try_into().unwrap())) }
-                            td { (job.args) }
-                            td { (job.attempts) }
-                            td { (job.inserted_at) }
-                            td { (job.locked_at) }
-                            td { (job.completed_at) }
-                            td { (job.failed_at) }
-                            td { (job.updated_at) }
+                            td { (message.queue_name) }
+                            td { (Uuid::from_bytes(message.id.try_into().unwrap())) }
+                            td { (message.args) }
+                            td { (message.attempts) }
+                            td { (message.inserted_at) }
+                            td { (message.locked_at) }
+                            td { (message.completed_at) }
+                            td { (message.failed_at) }
+                            td { (message.updated_at) }
                         }
                     }
                 }

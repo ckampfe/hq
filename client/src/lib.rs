@@ -29,10 +29,10 @@ impl Client {
         })
     }
 
-    pub async fn enqueue_job<T: Serialize>(
+    pub async fn enqueue_message<T: Serialize>(
         &self,
         queue: &str,
-        job_params: &T,
+        message_params: &T,
     ) -> Result<EnqueueResponse, reqwest::Error> {
         let mut url = self.url.clone();
 
@@ -43,7 +43,7 @@ impl Client {
 
         self.http_client
             .post(url)
-            .json(job_params)
+            .json(message_params)
             .send()
             .await?
             .error_for_status()?
@@ -51,10 +51,10 @@ impl Client {
             .await
     }
 
-    pub async fn receive_job<T: DeserializeOwned>(
+    pub async fn receive_message<T: DeserializeOwned>(
         &self,
         queue: &str,
-    ) -> Result<Option<Job<T>>, reqwest::Error> {
+    ) -> Result<Option<Message<T>>, reqwest::Error> {
         let mut url = self.url.clone();
 
         {
@@ -62,7 +62,7 @@ impl Client {
             path_segments.extend(["queues", queue, "receive"]);
         }
 
-        let job: Option<Job<T>> = self
+        let message: Option<Message<T>> = self
             .http_client
             .get(url)
             .send()
@@ -71,15 +71,19 @@ impl Client {
             .json()
             .await?;
 
-        Ok(job)
+        Ok(message)
     }
 
-    pub async fn complete_job(&self, job_id: Uuid) -> Result<(), reqwest::Error> {
+    pub async fn complete_message(&self, message_id: Uuid) -> Result<(), reqwest::Error> {
         let mut url = self.url.clone();
 
         {
             let mut path_segments = url.path_segments_mut().unwrap();
-            path_segments.extend(["jobs", &job_id.as_hyphenated().to_string(), "complete"]);
+            path_segments.extend([
+                "messages",
+                &message_id.as_hyphenated().to_string(),
+                "complete",
+            ]);
         }
 
         self.http_client.put(url).send().await?.error_for_status()?;
@@ -87,12 +91,12 @@ impl Client {
         Ok(())
     }
 
-    pub async fn fail_job(&self, job_id: Uuid) -> Result<(), reqwest::Error> {
+    pub async fn fail_message(&self, message_id: Uuid) -> Result<(), reqwest::Error> {
         let mut url = self.url.clone();
 
         {
             let mut path_segments = url.path_segments_mut().unwrap();
-            path_segments.extend(["jobs", &job_id.as_hyphenated().to_string(), "fail"]);
+            path_segments.extend(["messages", &message_id.as_hyphenated().to_string(), "fail"]);
         }
 
         self.http_client.put(url).send().await?.error_for_status()?;
@@ -222,7 +226,7 @@ pub struct UpdateQueueRequest {
 }
 
 #[derive(serde::Deserialize, Debug)]
-pub struct Job<T> {
+pub struct Message<T> {
     pub id: Uuid,
     pub args: T,
     pub queue: String,
@@ -244,7 +248,7 @@ pub struct CreateQueueRequest {
 
 #[derive(Deserialize)]
 pub struct EnqueueResponse {
-    pub job_id: Uuid,
+    pub message_id: Uuid,
 }
 
 #[cfg(test)]
@@ -484,7 +488,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn enqueues_job() {
+    async fn enqueues_message() {
         let (port, _server_handle) = serve().await;
         let client =
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
@@ -499,13 +503,13 @@ mod tests {
             .unwrap();
 
         client
-            .enqueue_job("some_queue", &HashMap::from([("foo", "bar")]))
+            .enqueue_message("some_queue", &HashMap::from([("foo", "bar")]))
             .await
             .unwrap();
     }
 
     #[tokio::test]
-    async fn receive_no_job() {
+    async fn receive_no_message() {
         let (port, _server_handle) = serve().await;
         let client =
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
@@ -522,17 +526,18 @@ mod tests {
             .unwrap();
 
         #[derive(Serialize, Deserialize)]
-        struct SomeJob {
+        struct Somemessage {
             foo: String,
         }
 
-        let job_response: Option<Job<SomeJob>> = client.receive_job(&queue).await.unwrap();
+        let message_response: Option<Message<Somemessage>> =
+            client.receive_message(&queue).await.unwrap();
 
-        assert!(job_response.is_none())
+        assert!(message_response.is_none())
     }
 
     #[tokio::test]
-    async fn receive_with_job() {
+    async fn receive_with_message() {
         let (port, _server_handle) = serve().await;
         let client =
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
@@ -549,24 +554,25 @@ mod tests {
             .unwrap();
 
         #[derive(Serialize, Deserialize)]
-        struct SomeJob {
+        struct Somemessage {
             foo: String,
         }
 
-        let job = SomeJob {
+        let message = Somemessage {
             foo: "bar".to_string(),
         };
 
-        client.enqueue_job(&queue, &job).await.unwrap();
+        client.enqueue_message(&queue, &message).await.unwrap();
 
-        let job_response: Job<SomeJob> = client.receive_job(&queue).await.unwrap().unwrap();
+        let message_response: Message<Somemessage> =
+            client.receive_message(&queue).await.unwrap().unwrap();
 
-        assert_eq!(job_response.args.foo, job.foo);
-        assert_eq!(job_response.queue, queue);
+        assert_eq!(message_response.args.foo, message.foo);
+        assert_eq!(message_response.queue, queue);
     }
 
     #[tokio::test]
-    async fn completes_uncompleted_job() {
+    async fn completes_uncompleted_message() {
         let (port, _server_handle) = serve().await;
         let client =
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
@@ -583,27 +589,29 @@ mod tests {
             .unwrap();
 
         #[derive(Serialize, Deserialize, Debug)]
-        struct SomeJob {
+        struct Somemessage {
             foo: String,
         }
 
-        let job = SomeJob {
+        let message = Somemessage {
             foo: "bar".to_string(),
         };
 
-        client.enqueue_job(&queue, &job).await.unwrap();
+        client.enqueue_message(&queue, &message).await.unwrap();
 
-        let job_response: Job<SomeJob> = client.receive_job(&queue).await.unwrap().unwrap();
+        let message_response: Message<Somemessage> =
+            client.receive_message(&queue).await.unwrap().unwrap();
 
-        client.complete_job(job_response.id).await.unwrap();
+        client.complete_message(message_response.id).await.unwrap();
 
-        let job_response: Option<Job<SomeJob>> = client.receive_job(&queue).await.unwrap();
+        let message_response: Option<Message<Somemessage>> =
+            client.receive_message(&queue).await.unwrap();
 
-        assert!(job_response.is_none());
+        assert!(message_response.is_none());
     }
 
     #[tokio::test]
-    async fn fails_job() {
+    async fn fails_message() {
         let (port, _server_handle) = serve().await;
         let client =
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
@@ -620,27 +628,29 @@ mod tests {
             .unwrap();
 
         #[derive(Serialize, Deserialize, Debug)]
-        struct SomeJob {
+        struct Somemessage {
             foo: String,
         }
 
-        let job = SomeJob {
+        let message = Somemessage {
             foo: "bar".to_string(),
         };
 
-        client.enqueue_job(&queue, &job).await.unwrap();
+        client.enqueue_message(&queue, &message).await.unwrap();
 
-        let job_response: Job<SomeJob> = client.receive_job(&queue).await.unwrap().unwrap();
+        let message_response: Message<Somemessage> =
+            client.receive_message(&queue).await.unwrap().unwrap();
 
-        client.fail_job(job_response.id).await.unwrap();
+        client.fail_message(message_response.id).await.unwrap();
 
-        let job_response: Option<Job<SomeJob>> = client.receive_job(&queue).await.unwrap();
+        let message_response: Option<Message<Somemessage>> =
+            client.receive_message(&queue).await.unwrap();
 
-        assert!(job_response.is_none());
+        assert!(message_response.is_none());
     }
 
     #[tokio::test]
-    async fn visibility_timeout_unlocks_locked_job_and_respects_max_attempts() {
+    async fn visibility_timeout_unlocks_locked_message_and_respects_max_attempts() {
         let (port, _server_handle) = serve().await;
         let client =
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
@@ -657,30 +667,33 @@ mod tests {
             .unwrap();
 
         #[derive(Serialize, Deserialize, Debug)]
-        struct SomeJob {
+        struct Somemessage {
             foo: String,
         }
 
-        let job = SomeJob {
+        let message = Somemessage {
             foo: "bar".to_string(),
         };
 
-        client.enqueue_job(&queue, &job).await.unwrap();
+        client.enqueue_message(&queue, &message).await.unwrap();
 
-        let job_response1: Job<SomeJob> = client.receive_job(&queue).await.unwrap().unwrap();
-
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-
-        let job_response2: Job<SomeJob> = client.receive_job(&queue).await.unwrap().unwrap();
+        let message_response1: Message<Somemessage> =
+            client.receive_message(&queue).await.unwrap().unwrap();
 
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
-        let job_response3: Option<Job<SomeJob>> = client.receive_job(&queue).await.unwrap();
+        let message_response2: Message<Somemessage> =
+            client.receive_message(&queue).await.unwrap().unwrap();
 
-        assert_eq!(job_response1.id, job_response2.id);
-        assert_eq!(job_response1.attempts, 1);
-        assert_eq!(job_response2.attempts, 2);
-        assert!(job_response3.is_none());
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+        let message_response3: Option<Message<Somemessage>> =
+            client.receive_message(&queue).await.unwrap();
+
+        assert_eq!(message_response1.id, message_response2.id);
+        assert_eq!(message_response1.attempts, 1);
+        assert_eq!(message_response2.attempts, 2);
+        assert!(message_response3.is_none());
     }
 
     async fn serve() -> (u16, ServerHandle) {

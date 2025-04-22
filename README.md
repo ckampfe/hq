@@ -6,7 +6,7 @@
 
 ## what
 
-This is a message queue/job queue designed with an interface like [SQS](https://aws.amazon.com/sqs/), but targeted at use cases where SQS might be overkill or where you can't access it, like on low-powered or embedded devices, or where you have low message volume.
+This is a message queue designed with an interface like [SQS](https://aws.amazon.com/sqs/), but targeted at use cases where SQS might be overkill or where you can't access it, like on low-powered or embedded devices, or where you have low message volume.
 
 It can run with an on-disk or in-memory SQLite database if you don't need persistence.
 
@@ -23,7 +23,7 @@ For the whole API see the Rust client in `client`.
 Return values are "happy" cases. Everything can error.
 
 POST "/queues/{name}/enqueue" with JSON body
-    returns JSON `{"job_id" -> uuid}`
+    returns JSON `{"messages_id" -> uuid}`
 
 GET "/queues/{name}/receive"
     returns optional JSON `{ id: string uuid, args: json, queue: string, attempts: integer }`
@@ -43,9 +43,9 @@ GET "/queues"
 POST "/queues?name=string&max_attempts=integer&visibility_timeout_seconds=integer"
     returns ()
 
-PUT "/jobs/{id}/complete"
+PUT "/messages/{id}/complete"
     returns ()
 
-PUT "/jobs/{id}/fail"
+PUT "/messages/{id}/fail"
     returns ()
 ```

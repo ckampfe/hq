@@ -7,7 +7,7 @@ use repo::Repo;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub mod job;
+pub mod message;
 pub mod queue;
 pub mod repo;
 #[cfg(feature = "web")]
@@ -69,8 +69,8 @@ pub async fn app(options: Options) -> anyhow::Result<Router> {
         .route("/queues/{name}", delete(queue::delete))
         .route("/queues", get(queue::list))
         .route("/queues", post(queue::create))
-        .route("/jobs/{id}/complete", put(job::complete))
-        .route("/jobs/{id}/fail", put(job::fail));
+        .route("/messages/{id}/complete", put(message::complete))
+        .route("/messages/{id}/fail", put(message::fail));
 
     let router = Router::new();
 

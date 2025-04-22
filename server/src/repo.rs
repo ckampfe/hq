@@ -5,7 +5,7 @@ use sqlx::{Connection, Sqlite};
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::{job::Job, queue, web};
+use crate::{message::Message, queue, web};
 
 #[derive(Debug)]
 pub struct Options {
@@ -34,7 +34,7 @@ impl Repo {
     }
 
     #[instrument]
-    pub async fn enqueue_job(&self, queue: &str, body: &str) -> anyhow::Result<Uuid> {
+    pub async fn enqueue_message(&self, queue: &str, body: &str) -> anyhow::Result<Uuid> {
         const GET_QUEUE_ID_QUERY: &str = "
     select
         id
@@ -42,8 +42,8 @@ impl Repo {
     where name = ?
         ";
 
-        const INSERT_JOB_QUERY: &str = "
-    insert into hq_jobs(id, args, queue_id)
+        const INSERT_MESSAGE_QUERY: &str = "
+    insert into hq_messages(id, args, queue_id)
     values (?, ?, ?)
     ";
 
@@ -58,10 +58,10 @@ impl Repo {
             .fetch_one(&mut *txn)
             .await?;
 
-        let job_id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
 
-        sqlx::query(INSERT_JOB_QUERY)
-            .bind(&job_id.as_bytes()[..])
+        sqlx::query(INSERT_MESSAGE_QUERY)
+            .bind(&message_id.as_bytes()[..])
             .bind(body)
             .bind(queue_id)
             .execute(&mut *txn)
@@ -69,28 +69,28 @@ impl Repo {
 
         txn.commit().await?;
 
-        Ok(job_id)
+        Ok(message_id)
     }
 
     #[instrument]
-    pub async fn receive_job(&self, queue: &str) -> anyhow::Result<Option<Job>> {
+    pub async fn receive_message(&self, queue: &str) -> anyhow::Result<Option<Message>> {
         const QUERY: &str = "
-        update hq_jobs
+        update hq_messages
         set
             attempts = attempts + 1,
             locked_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
         where id = (
             select
-                hq_jobs.id
-            from hq_jobs
+                hq_messages.id
+            from hq_messages
             inner join hq_queues
-                on hq_queues.id = hq_jobs.queue_id
+                on hq_queues.id = hq_messages.queue_id
                 and hq_queues.name = ?
             and completed_at is null
             and locked_at is null
             and failed_at is null
             and attempts < hq_queues.max_attempts
-            order by hq_jobs.updated_at asc
+            order by hq_messages.updated_at asc
             limit 1
         )
         returning
@@ -102,21 +102,21 @@ impl Repo {
 
         let mut conn = self.pool.acquire().await?;
 
-        let job: Option<Job> = sqlx::query_as(QUERY)
+        let message: Option<Message> = sqlx::query_as(QUERY)
             .bind(queue)
             .fetch_optional(&mut *conn)
             .await?;
 
-        Ok(job.map(|mut job| {
-            job.queue = queue.to_owned();
-            job
+        Ok(message.map(|mut message| {
+            message.queue = queue.to_owned();
+            message
         }))
     }
 
     #[instrument]
-    pub async fn complete_job(&self, job_id: Uuid) -> anyhow::Result<()> {
+    pub async fn complete_message(&self, message_id: Uuid) -> anyhow::Result<()> {
         const QUERY: &str = "
-        update hq_jobs
+        update hq_messages
         set
             completed_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'),
             locked_at = null
@@ -131,15 +131,18 @@ impl Repo {
         // TODO think about this,
         // should we have a notion of "receipt handle"?
         // https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_DeleteMessage.html
-        sqlx::query(QUERY).bind(job_id).execute(&mut *conn).await?;
+        sqlx::query(QUERY)
+            .bind(message_id)
+            .execute(&mut *conn)
+            .await?;
 
         Ok(())
     }
 
     #[instrument]
-    pub async fn fail_job(&self, job_id: Uuid) -> anyhow::Result<()> {
+    pub async fn fail_message(&self, message_id: Uuid) -> anyhow::Result<()> {
         const QUERY: &str = "
-        update hq_jobs
+        update hq_messages
         set
             failed_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'),
             locked_at = null
@@ -154,33 +157,36 @@ impl Repo {
         // TODO think about this,
         // should we have a notion of "receipt handle"?
         // https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_DeleteMessage.html
-        sqlx::query(QUERY).bind(job_id).execute(&mut *conn).await?;
+        sqlx::query(QUERY)
+            .bind(message_id)
+            .execute(&mut *conn)
+            .await?;
 
         Ok(())
     }
 
     #[instrument]
-    pub async fn jobs_sample(&self, limit: i64) -> sqlx::Result<Vec<web::Job>> {
+    pub async fn messages_sample(&self, limit: i64) -> sqlx::Result<Vec<web::Message>> {
         const QUERY: &str = "
         select
-            hq_jobs.id,
-            hq_jobs.args,
+            hq_messages.id,
+            hq_messages.args,
             hq_queues.name as queue_name,
-            hq_jobs.attempts,
-            hq_jobs.inserted_at,
-            hq_jobs.updated_at,
-            hq_jobs.locked_at,
-            hq_jobs.completed_at,
-            hq_jobs.failed_at
-        from hq_jobs
+            hq_messages.attempts,
+            hq_messages.inserted_at,
+            hq_messages.updated_at,
+            hq_messages.locked_at,
+            hq_messages.completed_at,
+            hq_messages.failed_at
+        from hq_messages
         inner join hq_queues
-            on hq_queues.id = hq_jobs.queue_id
+            on hq_queues.id = hq_messages.queue_id
         order by 
-            hq_jobs.updated_at desc,
-            hq_jobs.inserted_at desc,
-            hq_jobs.locked_at desc,
-            hq_jobs.completed_at desc,
-            hq_jobs.failed_at desc
+            hq_messages.updated_at desc,
+            hq_messages.inserted_at desc,
+            hq_messages.locked_at desc,
+            hq_messages.completed_at desc,
+            hq_messages.failed_at desc
         limit ?;
         ";
         let mut conn = self.pool.acquire().await.unwrap();
@@ -310,19 +316,19 @@ impl Repo {
     }
 
     #[instrument]
-    pub(crate) async fn unlock_jobs_locked_longer_than_timeout(&self) -> sqlx::Result<()> {
+    pub(crate) async fn unlock_messages_locked_longer_than_timeout(&self) -> sqlx::Result<()> {
         // unlock queries that have been locked
         // for longer than timeout and have attempts <= allowed
         const UNLOCK_LOCKED_TIMEOUT_QUERY: &str = "
-        update hq_jobs
+        update hq_messages
         set
             locked_at = null
         where id in (
             select
-                hq_jobs.id
-            from hq_jobs
+                hq_messages.id
+            from hq_messages
             inner join hq_queues
-                on hq_queues.id = hq_jobs.queue_id
+                on hq_queues.id = hq_messages.queue_id
             where locked_at is not null
             and completed_at is null
             and failed_at is null
@@ -334,16 +340,16 @@ impl Repo {
         // unlocked and fail queries that have been locked
         // for longer than timeout and have attempts > allowed
         const FAIL_LOCKED_TIMEOUT_QUERY: &str = "
-        update hq_jobs
+        update hq_messages
         set
             failed_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'),
             locked_at = null
         where id in (
             select
-                hq_jobs.id
-            from hq_jobs
+                hq_messages.id
+            from hq_messages
             inner join hq_queues
-                on hq_queues.id = hq_jobs.queue_id
+                on hq_queues.id = hq_messages.queue_id
             where locked_at is not null
             and completed_at is null
             and failed_at is null
@@ -389,7 +395,7 @@ impl Repo {
             where id = old.id;
         end;
 
-        create table if not exists hq_jobs (
+        create table if not exists hq_messages (
             id blob primary key,
             args text not null,
             queue_id integer not null,
@@ -403,16 +409,16 @@ impl Repo {
             foreign key(queue_id) references hq_queues(id) on delete cascade
         );
 
-        create trigger if not exists hq_jobs_updated_at after update on hq_jobs
+        create trigger if not exists hq_messages_updated_at after update on hq_messages
         begin
-            update hq_jobs set updated_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
+            update hq_messages set updated_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
             where id = old.id;
         end;
 
-        create index if not exists queue_id_idx on hq_jobs(queue_id);
-        create index if not exists inserted_at_idx on hq_jobs(inserted_at);
-        create index if not exists locked_at_idx on hq_jobs(locked_at);
-        create index if not exists completed_at_idx on hq_jobs(completed_at);
+        create index if not exists queue_id_idx on hq_messages(queue_id);
+        create index if not exists inserted_at_idx on hq_messages(inserted_at);
+        create index if not exists locked_at_idx on hq_messages(locked_at);
+        create index if not exists completed_at_idx on hq_messages(completed_at);
     ";
 
         let mut conn = self.pool.acquire().await?;

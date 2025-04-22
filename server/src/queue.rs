@@ -165,7 +165,7 @@ pub async fn delete(
 
 #[derive(Serialize)]
 pub struct EnqueueResponse {
-    job_id: Uuid,
+    message_id: Uuid,
 }
 
 #[instrument(skip(state))]
@@ -176,21 +176,21 @@ pub async fn enqueue(
 ) -> axum::response::Result<Json<EnqueueResponse>, AppError> {
     let state = state.lock().await;
 
-    let job_id = state.repo.enqueue_job(&queue, &body).await?;
+    let message_id = state.repo.enqueue_message(&queue, &body).await?;
 
-    Ok(Json(EnqueueResponse { job_id }))
+    Ok(Json(EnqueueResponse { message_id }))
 }
 
 #[instrument(skip(state))]
 pub async fn receive(
     State(state): State<Arc<Mutex<AppState>>>,
     Path(queue): Path<String>,
-) -> axum::response::Result<Json<Option<crate::job::Job>>, AppError> {
+) -> axum::response::Result<Json<Option<crate::message::Message>>, AppError> {
     let state = state.lock().await;
 
-    let job = state.repo.receive_job(&queue).await?;
+    let message = state.repo.receive_message(&queue).await?;
 
-    Ok(Json(job))
+    Ok(Json(message))
 }
 
 #[instrument]
@@ -200,7 +200,7 @@ pub fn start_lock_task(
 ) -> tokio::task::JoinHandle<Result<(), sqlx::Error>> {
     tokio::spawn(async move {
         loop {
-            repo.unlock_jobs_locked_longer_than_timeout().await?;
+            repo.unlock_messages_locked_longer_than_timeout().await?;
             tokio::time::sleep(tick).await;
         }
     })

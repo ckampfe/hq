@@ -7,7 +7,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 #[derive(sqlx::FromRow, Serialize, Debug)]
-pub struct Job {
+pub struct Message {
     pub id: sqlx::types::Uuid,
     pub args: serde_json::Value,
     pub queue: String,
@@ -17,11 +17,11 @@ pub struct Job {
 #[instrument(skip(state))]
 pub async fn complete(
     State(state): State<Arc<Mutex<AppState>>>,
-    Path(job_id): Path<Uuid>,
+    Path(message_id): Path<Uuid>,
 ) -> axum::response::Result<(), AppError> {
     let state = state.lock().await;
 
-    state.repo.complete_job(job_id).await?;
+    state.repo.complete_message(message_id).await?;
 
     Ok(())
 }
@@ -29,11 +29,11 @@ pub async fn complete(
 #[instrument(skip(state))]
 pub async fn fail(
     State(state): State<Arc<Mutex<AppState>>>,
-    Path(job_id): Path<Uuid>,
+    Path(message_id): Path<Uuid>,
 ) -> axum::response::Result<(), AppError> {
     let state = state.lock().await;
 
-    state.repo.fail_job(job_id).await?;
+    state.repo.fail_message(message_id).await?;
 
     Ok(())
 }
