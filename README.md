@@ -6,9 +6,39 @@
 
 ## what
 
-This is a message queue designed with an interface like [SQS](https://aws.amazon.com/sqs/), but targeted at use cases where SQS might be overkill or where you can't access it, like on low-powered or embedded devices, or where you have low message volume.
+hq is a multi-producer multi-consumer message queue, similar [SQS](https://aws.amazon.com/sqs/), but targeted at use cases where SQS might be overkill or where you can't access it, like on low-powered or embedded devices, or where you have low message volume.
 
 It can run with an on-disk or in-memory SQLite database if you don't need persistence.
+
+## message and queue model
+
+Messages are the unit of communication between producers and consumers.
+Queues are ordered lists of messages.
+Consumers dequeue messages in the order producers sent them to the queue.
+There can be many queues.
+
+When a producer sends a message, it goes into a queue until a consumer receives it.
+
+When a consumer receives a message, the message is locked and cannot be seen by other consumers for the queue's configured `visibility_timeout_seconds`. After `visibility_timeout_seconds`, the message is visible to and receivable by consumers.
+
+If the consumer completes the message before `visibility_timeout_seconds`, the message is marked as completed and can no longer be seen by consumers.
+
+If the consumer fails the message, the message can no longer be seen by consumers.
+
+If a message is locked more than the queue's configured `max_attempts`, the message is failed.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unlocked: Producer sends Message
+    Unlocked --> Locked: Consumer receives message
+    Locked --> Complete: Consumer completes messsage
+    Locked --> Failed: Consumer fails message
+    Locked --> Unlocked:  Message is locked for longer than visibility_timeout_seconds and attempts <= max_attempts
+    Locked --> Failed: Message is locked for longer than visibility_timeout_seconds and attempts > max_attempts
+    Complete --> [*]
+    Failed --> [*]
+```
+
 
 ## API
 
