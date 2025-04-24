@@ -21,12 +21,9 @@ pub struct Options {
     /// the maximum request timeout, in seconds
     #[arg(short, long, env)]
     pub request_timeout: Option<u64>,
-    /// the database path
+    /// the database path. pass `:memory:` to run with an in-memory database
     #[arg(short, long, env)]
     pub database: String,
-    /// should the db be in memory
-    #[arg(short, long, env, default_value_t = false)]
-    pub in_memory: bool,
 }
 
 #[derive(Debug)]
@@ -36,17 +33,13 @@ pub struct AppState {
 }
 
 pub async fn app(options: Options) -> anyhow::Result<Router> {
-    let db_name = if options.in_memory {
+    let db_name = if options.database == ":memory:" {
         "sqlite::memory:".to_string()
     } else {
-        options.database.clone()
+        "sqlite://".to_string() + &options.database
     };
 
-    let repo = Repo::new(repo::Options {
-        db_name,
-        in_memory: options.in_memory,
-    })
-    .await?;
+    let repo = Repo::new(repo::Options { db_name }).await?;
 
     repo.migrate().await?;
 

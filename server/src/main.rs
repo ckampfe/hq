@@ -11,6 +11,9 @@
 // - [x] initial readme
 // - [x] "jobs"? "messages"? figure it out
 // - [ ] common datatypes between server and client?
+// - [ ] config "dryrun", to validate config without starting server
+// - [ ] benchmarks, which are also simulations
+// - [x] figure out a better way to configure whether we run in-memory or on disk
 // queues
 // - [x] create
 // - [x] list

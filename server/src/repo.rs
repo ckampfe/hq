@@ -10,7 +10,12 @@ use crate::{message::Message, queue, web};
 #[derive(Debug)]
 pub struct Options {
     pub db_name: String,
-    pub in_memory: bool,
+}
+
+impl Options {
+    fn is_in_memory(&self) -> bool {
+        self.db_name == "sqlite::memory:"
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -26,7 +31,7 @@ impl Repo {
             .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
             .create_if_missing(true)
             .foreign_keys(true)
-            .in_memory(options.in_memory);
+            .in_memory(options.is_in_memory());
 
         let pool = sqlx::SqlitePool::connect_with(opts).await?;
 

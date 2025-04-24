@@ -706,8 +706,7 @@ mod tests {
         let options = Options {
             port,
             request_timeout: Some(5),
-            database: "testdb".to_string(),
-            in_memory: true,
+            database: ":memory:".to_string(),
         };
 
         let router = server::app(options).await.unwrap();
