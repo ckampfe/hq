@@ -33,7 +33,7 @@ hq is _not_ targeted at use cases where:
 - There can be arbitrarily many queues
 - When a producer sends a message, it goes into a queue until a consumer receives it
 - When a consumer receives a message, the message is locked and cannot be seen by other consumers for the queue's configured `visibility_timeout_seconds`
-- After `visibility_timeout_seconds`, the message becomes visible to and receivable by consumers
+- After `visibility_timeout_seconds`, if not complete or failed, the message becomes visible to and receivable by consumers
 - If the consumer completes the message before `visibility_timeout_seconds`, the message is marked as completed and can no longer be seen by consumers
 - Receiving a message increments its `attempts`
 - A queue has a configured number of `max_attempts`
