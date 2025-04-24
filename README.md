@@ -39,6 +39,35 @@ stateDiagram-v2
     Failed --> [*]
 ```
 
+## Building the server
+
+```
+$ cargo build --release
+```
+
+## Running the server
+
+```
+./target/release/server
+```
+
+## Options
+
+```
+$ ./target/release/server -h
+Usage: server [OPTIONS] --database <DATABASE>
+
+Options:
+  -p, --port <PORT>
+          the port to bind the server to [env: PORT=] [default: 9999]
+  -r, --request-timeout <REQUEST_TIMEOUT>
+          the maximum request timeout, in seconds [env: REQUEST_TIMEOUT=]
+  -d, --database <DATABASE>
+          the database path. pass `:memory:` to run with an in-memory database [env: DATABASE=]
+  -h, --help
+          Print help
+```
+
 
 ## API
 
