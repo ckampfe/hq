@@ -21,6 +21,8 @@
 // - [x] update
 // - [x] delete (and all messages)
 // - [x] use query params for most stuff instead of json bodies
+// - [ ] improve queue metadata for GET /queues/{name}
+// - [ ] improve queue metadata for GET /queues
 // messages
 // - [x] enqueue message
 // - [x] receive message
