@@ -217,6 +217,8 @@ pub struct Queue {
     pub name: String,
     pub max_attempts: i64,
     pub visibility_timeout_seconds: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Serialize)]
@@ -237,6 +239,9 @@ pub struct Message<T> {
 pub struct ListQueuesResponse {
     pub name: String,
     pub max_attempts: i64,
+    pub visibility_timeout_seconds: i64,
+    pub inserted_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Serialize)]
@@ -295,7 +300,11 @@ mod tests {
         let queues = client.list_queues().await.unwrap();
 
         assert_eq!(queues[0].name, queue_name);
-        assert_eq!(queues[0].max_attempts, max_attempts)
+        assert_eq!(queues[0].max_attempts, max_attempts);
+        assert_eq!(queues[0].visibility_timeout_seconds, 30);
+        // TODO parse
+        assert!(!queues[0].inserted_at.is_empty());
+        assert!(!queues[0].updated_at.is_empty());
     }
 
     #[tokio::test]
@@ -340,6 +349,9 @@ mod tests {
         assert_eq!(q.name, "some_queue");
         assert_eq!(q.max_attempts, 5);
         assert_eq!(q.visibility_timeout_seconds, 30);
+        // TODO parse
+        assert!(!q.inserted_at.is_empty());
+        assert!(!q.updated_at.is_empty());
     }
 
     #[tokio::test]

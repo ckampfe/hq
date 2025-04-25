@@ -14,7 +14,7 @@ use uuid::Uuid;
 #[instrument(skip(state))]
 pub async fn list(
     State(state): State<Arc<Mutex<AppState>>>,
-) -> axum::response::Result<Json<Vec<crate::repo::Queue>>, AppError> {
+) -> axum::response::Result<Json<Vec<ShowQueueResponse>>, AppError> {
     let state = state.lock().await;
 
     let queues = state.repo.get_queues().await?;
@@ -79,6 +79,8 @@ pub struct ShowQueueResponse {
     name: String,
     max_attempts: i64,
     visibility_timeout_seconds: i64,
+    inserted_at: String,
+    updated_at: String,
 }
 
 #[instrument(skip(state))]

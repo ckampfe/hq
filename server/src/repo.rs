@@ -1,11 +1,10 @@
-use std::str::FromStr;
-
-use serde::Serialize;
+use crate::message::Message;
+use crate::queue::ShowQueueResponse;
+use crate::web;
 use sqlx::{Connection, Sqlite};
+use std::str::FromStr;
 use tracing::instrument;
 use uuid::Uuid;
-
-use crate::{message::Message, queue, web};
 
 #[derive(Debug)]
 pub struct Options {
@@ -286,12 +285,14 @@ impl Repo {
     pub(crate) async fn get_queue(
         &self,
         queue: String,
-    ) -> Result<Option<queue::ShowQueueResponse>, sqlx::Error> {
+    ) -> Result<Option<ShowQueueResponse>, sqlx::Error> {
         const QUERY: &str = "
         select
             name,
             max_attempts,
-            visibility_timeout_seconds
+            visibility_timeout_seconds,
+            inserted_at,
+            updated_at
         from hq_queues
         where name = ?
         limit 1
@@ -306,11 +307,14 @@ impl Repo {
     }
 
     #[instrument]
-    pub async fn get_queues(&self) -> sqlx::Result<Vec<Queue>> {
+    pub async fn get_queues(&self) -> sqlx::Result<Vec<ShowQueueResponse>> {
         const QUERY: &str = "
         select
             name,
-            max_attempts
+            max_attempts,
+            visibility_timeout_seconds,
+            inserted_at,
+            updated_at
         from hq_queues
         order by name
         ";
@@ -432,10 +436,4 @@ impl Repo {
 
         Ok(())
     }
-}
-
-#[derive(sqlx::FromRow, Serialize, Debug)]
-pub struct Queue {
-    pub name: String,
-    pub max_attempts: i64,
 }

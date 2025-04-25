@@ -21,6 +21,7 @@
 // - [x] update
 // - [x] delete (and all messages)
 // - [x] use query params for most stuff instead of json bodies
+// - [x] include inserted_at and updated_at for GET /queues/{name} and GET /queues
 // - [ ] improve queue metadata for GET /queues/{name}
 // - [ ] improve queue metadata for GET /queues
 // messages
