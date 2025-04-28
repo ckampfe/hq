@@ -1,4 +1,5 @@
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -33,7 +34,7 @@ impl Client {
         &self,
         queue: &str,
         message_params: &T,
-    ) -> Result<EnqueueResponse, reqwest::Error> {
+    ) -> Result<common::EnqueueResponse, reqwest::Error> {
         let mut url = self.url.clone();
 
         {
@@ -104,7 +105,7 @@ impl Client {
         Ok(())
     }
 
-    pub async fn list_queues(&self) -> Result<Vec<ListQueuesResponse>, reqwest::Error> {
+    pub async fn list_queues(&self) -> Result<Vec<common::ShowQueueResponse>, reqwest::Error> {
         let mut url = self.url.clone();
 
         url.set_path("queues");
@@ -118,7 +119,10 @@ impl Client {
             .await
     }
 
-    pub async fn create_queue(&self, queue: CreateQueueRequest) -> Result<(), reqwest::Error> {
+    pub async fn create_queue(
+        &self,
+        queue: common::CreateQueueRequest,
+    ) -> Result<(), reqwest::Error> {
         let mut url = self.url.clone();
 
         url.set_path("queues");
@@ -145,7 +149,10 @@ impl Client {
         Ok(())
     }
 
-    pub async fn get_queue(&self, queue: &str) -> Result<Option<Queue>, reqwest::Error> {
+    pub async fn get_queue(
+        &self,
+        queue: &str,
+    ) -> Result<Option<common::ShowQueueResponse>, reqwest::Error> {
         let mut url = self.url.clone();
 
         {
@@ -153,7 +160,7 @@ impl Client {
             path_segments.extend(["queues", queue]);
         }
 
-        let queue: Option<Queue> = self
+        let queue: Option<common::ShowQueueResponse> = self
             .http_client
             .get(url)
             .send()
@@ -168,7 +175,7 @@ impl Client {
     pub async fn update_queue(
         &self,
         queue: &str,
-        params: UpdateQueueRequest,
+        params: common::UpdateQueueRequest,
     ) -> Result<(), reqwest::Error> {
         let mut url = self.url.clone();
 
@@ -212,21 +219,6 @@ impl Client {
     }
 }
 
-#[derive(Deserialize)]
-pub struct Queue {
-    pub name: String,
-    pub max_attempts: i64,
-    pub visibility_timeout_seconds: i64,
-    pub inserted_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Serialize)]
-pub struct UpdateQueueRequest {
-    max_attempts: Option<i64>,
-    visibility_timeout_seconds: Option<i64>,
-}
-
 #[derive(serde::Deserialize, Debug)]
 pub struct Message<T> {
     pub id: Uuid,
@@ -235,32 +227,11 @@ pub struct Message<T> {
     pub attempts: i64,
 }
 
-#[derive(Deserialize)]
-pub struct ListQueuesResponse {
-    pub name: String,
-    pub max_attempts: i64,
-    pub visibility_timeout_seconds: i64,
-    pub inserted_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Serialize)]
-pub struct CreateQueueRequest {
-    name: String,
-    max_attempts: i64,
-    visibility_timeout_seconds: i64,
-}
-
-#[derive(Deserialize)]
-pub struct EnqueueResponse {
-    pub message_id: Uuid,
-}
-
 #[cfg(test)]
 mod tests {
-    use server::Options;
-
     use super::*;
+    use serde::Deserialize;
+    use server::Options;
     use std::{collections::HashMap, sync::atomic::AtomicU16};
 
     #[tokio::test]
@@ -270,7 +241,7 @@ mod tests {
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: "some_queue".to_string(),
                 max_attempts: 5,
                 visibility_timeout_seconds: 30,
@@ -289,7 +260,7 @@ mod tests {
         let max_attempts = 5;
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: queue_name.clone(),
                 max_attempts,
                 visibility_timeout_seconds: 30,
@@ -324,7 +295,7 @@ mod tests {
         let client =
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
-        let q: Option<Queue> = client.get_queue("some_queue").await.unwrap();
+        let q: Option<common::ShowQueueResponse> = client.get_queue("some_queue").await.unwrap();
 
         assert!(q.is_none())
     }
@@ -336,7 +307,7 @@ mod tests {
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: "some_queue".to_string(),
                 max_attempts: 5,
                 visibility_timeout_seconds: 30,
@@ -361,7 +332,7 @@ mod tests {
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: "some_queue".to_string(),
                 max_attempts: 5,
                 visibility_timeout_seconds: 30,
@@ -377,7 +348,7 @@ mod tests {
         client
             .update_queue(
                 "some_queue",
-                UpdateQueueRequest {
+                common::UpdateQueueRequest {
                     max_attempts: Some(6),
                     visibility_timeout_seconds: None,
                 },
@@ -398,7 +369,7 @@ mod tests {
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: "some_queue".to_string(),
                 max_attempts: 5,
                 visibility_timeout_seconds: 30,
@@ -414,7 +385,7 @@ mod tests {
         client
             .update_queue(
                 "some_queue",
-                UpdateQueueRequest {
+                common::UpdateQueueRequest {
                     max_attempts: None,
                     visibility_timeout_seconds: Some(10),
                 },
@@ -435,7 +406,7 @@ mod tests {
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: "some_queue".to_string(),
                 max_attempts: 5,
                 visibility_timeout_seconds: 30,
@@ -451,7 +422,7 @@ mod tests {
         client
             .update_queue(
                 "some_queue",
-                UpdateQueueRequest {
+                common::UpdateQueueRequest {
                     max_attempts: None,
                     visibility_timeout_seconds: None,
                 },
@@ -484,7 +455,7 @@ mod tests {
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: "some_queue".to_string(),
                 max_attempts: 5,
                 visibility_timeout_seconds: 30,
@@ -506,7 +477,7 @@ mod tests {
             Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: "some_queue".to_string(),
                 max_attempts: 5,
                 visibility_timeout_seconds: 30,
@@ -529,7 +500,7 @@ mod tests {
         let queue = "some_queue".to_string();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: queue.clone(),
                 max_attempts: 5,
                 visibility_timeout_seconds: 30,
@@ -557,7 +528,7 @@ mod tests {
         let queue = "some_queue".to_string();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: queue.clone(),
                 max_attempts: 5,
                 visibility_timeout_seconds: 30,
@@ -592,7 +563,7 @@ mod tests {
         let queue = "some_queue".to_string();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: queue.clone(),
                 max_attempts: 5,
                 visibility_timeout_seconds: 30,
@@ -631,7 +602,7 @@ mod tests {
         let queue = "some_queue".to_string();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: queue.clone(),
                 max_attempts: 5,
                 visibility_timeout_seconds: 30,
@@ -670,7 +641,7 @@ mod tests {
         let queue = "some_queue".to_string();
 
         client
-            .create_queue(CreateQueueRequest {
+            .create_queue(common::CreateQueueRequest {
                 name: queue.clone(),
                 max_attempts: 2,
                 visibility_timeout_seconds: 1,

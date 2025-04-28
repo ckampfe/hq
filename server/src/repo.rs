@@ -1,5 +1,4 @@
 use crate::message::Message;
-use crate::queue::ShowQueueResponse;
 use crate::web;
 use sqlx::{Connection, Sqlite};
 use std::str::FromStr;
@@ -231,7 +230,7 @@ impl Repo {
     pub async fn update_queue(
         &self,
         name: &str,
-        update_queue_params: &crate::queue::UpdateQueueRequest,
+        update_queue_params: &common::UpdateQueueRequest,
     ) -> sqlx::Result<()> {
         if update_queue_params.is_some() {
             let mut query = "update hq_queues set\n".to_string();
@@ -285,7 +284,7 @@ impl Repo {
     pub(crate) async fn get_queue(
         &self,
         queue: String,
-    ) -> Result<Option<ShowQueueResponse>, sqlx::Error> {
+    ) -> Result<Option<common::ShowQueueResponse>, sqlx::Error> {
         const QUERY: &str = "
         select
             name,
@@ -307,7 +306,7 @@ impl Repo {
     }
 
     #[instrument]
-    pub async fn get_queues(&self) -> sqlx::Result<Vec<ShowQueueResponse>> {
+    pub async fn get_queues(&self) -> sqlx::Result<Vec<common::ShowQueueResponse>> {
         const QUERY: &str = "
         select
             name,

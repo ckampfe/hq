@@ -4,17 +4,16 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use serde::{Deserialize, Serialize};
+use common::EnqueueResponse;
 use std::ops::Deref;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::instrument;
-use uuid::Uuid;
 
 #[instrument(skip(state))]
 pub async fn list(
     State(state): State<Arc<Mutex<AppState>>>,
-) -> axum::response::Result<Json<Vec<ShowQueueResponse>>, AppError> {
+) -> axum::response::Result<Json<Vec<common::ShowQueueResponse>>, AppError> {
     let state = state.lock().await;
 
     let queues = state.repo.get_queues().await?;
@@ -22,17 +21,10 @@ pub async fn list(
     Ok(Json(queues))
 }
 
-#[derive(Deserialize, Debug)]
-pub struct CreateQueueRequest {
-    name: String,
-    max_attempts: i64,
-    visibility_timeout_seconds: i64,
-}
-
 #[instrument(skip(state))]
 pub async fn create(
     State(state): State<Arc<Mutex<AppState>>>,
-    create_queue: Query<CreateQueueRequest>,
+    create_queue: Query<common::CreateQueueRequest>,
 ) -> axum::response::Result<()> {
     if create_queue.max_attempts < 1 {
         return Err((
@@ -74,20 +66,11 @@ pub async fn create(
     Ok(())
 }
 
-#[derive(Serialize, sqlx::FromRow)]
-pub struct ShowQueueResponse {
-    name: String,
-    max_attempts: i64,
-    visibility_timeout_seconds: i64,
-    inserted_at: String,
-    updated_at: String,
-}
-
 #[instrument(skip(state))]
 pub async fn show(
     State(state): State<Arc<Mutex<AppState>>>,
     Path(queue): Path<String>,
-) -> axum::response::Result<Json<Option<ShowQueueResponse>>, AppError> {
+) -> axum::response::Result<Json<Option<common::ShowQueueResponse>>, AppError> {
     let state = state.lock().await;
 
     let queue = state.repo.get_queue(queue).await?;
@@ -95,23 +78,11 @@ pub async fn show(
     Ok(Json(queue))
 }
 
-#[derive(Deserialize, Debug)]
-pub struct UpdateQueueRequest {
-    pub max_attempts: Option<i64>,
-    pub visibility_timeout_seconds: Option<i64>,
-}
-
-impl UpdateQueueRequest {
-    pub fn is_some(&self) -> bool {
-        self.max_attempts.is_some() || self.visibility_timeout_seconds.is_some()
-    }
-}
-
 #[instrument(skip(state))]
 pub async fn update(
     State(state): State<Arc<Mutex<AppState>>>,
     Path(queue_name): Path<String>,
-    update_queue: Query<UpdateQueueRequest>,
+    update_queue: Query<common::UpdateQueueRequest>,
 ) -> axum::response::Result<()> {
     if let Some(max_attempts) = update_queue.max_attempts {
         if max_attempts < 1 {
@@ -163,11 +134,6 @@ pub async fn delete(
     state.repo.delete_queue(&queue_name).await?;
 
     Ok(())
-}
-
-#[derive(Serialize)]
-pub struct EnqueueResponse {
-    message_id: Uuid,
 }
 
 #[instrument(skip(state))]
