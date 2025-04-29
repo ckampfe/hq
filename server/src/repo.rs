@@ -39,16 +39,16 @@ impl Repo {
     #[instrument]
     pub async fn enqueue_message(&self, queue: &str, body: &str) -> anyhow::Result<Uuid> {
         const GET_QUEUE_ID_QUERY: &str = "
-    select
-        id
-    from hq_queues
-    where name = ?
+        select
+            id
+        from hq_queues
+        where name = ?
         ";
 
         const INSERT_MESSAGE_QUERY: &str = "
-    insert into hq_messages(id, args, queue_id)
-    values (?, ?, ?)
-    ";
+        insert into hq_messages(id, args, queue_id)
+        values (?, ?, ?)
+        ";
 
         let _valid_json_args: serde::de::IgnoredAny = serde_json::from_str(body)?;
 
