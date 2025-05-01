@@ -28,8 +28,8 @@ pub struct Options {
 
 #[derive(Debug)]
 pub struct AppState {
-    pub repo: Repo,
-    pub options: Options,
+    repo: Repo,
+    _options: Options,
 }
 
 pub async fn app(options: Options) -> anyhow::Result<Router> {
@@ -44,12 +44,13 @@ pub async fn app(options: Options) -> anyhow::Result<Router> {
     repo.migrate().await?;
 
     // TODO start a supervisor task to watch this task,
-    // and restart it if it fails
+    // and restart it if it fails, or
+    // crash the main task if this fails
     queue::start_lock_task(repo.clone(), std::time::Duration::from_secs(1));
 
     let state = AppState {
         repo,
-        options: options.clone(),
+        _options: options.clone(),
     };
 
     let state = Arc::new(Mutex::new(state));

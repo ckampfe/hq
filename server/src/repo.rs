@@ -1,12 +1,14 @@
 use crate::message::Message;
-use crate::web;
 use sqlx::{Connection, Sqlite};
 use std::str::FromStr;
 use tracing::instrument;
 use uuid::Uuid;
 
+#[cfg(feature = "web")]
+use crate::web;
+
 #[derive(Debug)]
-pub struct Options {
+pub(crate) struct Options {
     pub db_name: String,
 }
 
@@ -17,7 +19,7 @@ impl Options {
 }
 
 #[derive(Clone, Debug)]
-pub struct Repo {
+pub(crate) struct Repo {
     pool: sqlx::Pool<Sqlite>,
 }
 
@@ -168,6 +170,7 @@ impl Repo {
         Ok(())
     }
 
+    #[cfg(feature = "web")]
     #[instrument]
     pub async fn messages_sample(&self, limit: i64) -> sqlx::Result<Vec<web::Message>> {
         const QUERY: &str = "

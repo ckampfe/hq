@@ -8,11 +8,11 @@ pub struct Client {
     http_client: reqwest::Client,
 }
 
-pub struct ClientOptions {
+pub struct Options {
     request_timeout: std::time::Duration,
 }
 
-impl Default for ClientOptions {
+impl Default for Options {
     fn default() -> Self {
         Self {
             request_timeout: std::time::Duration::from_secs(30),
@@ -21,7 +21,7 @@ impl Default for ClientOptions {
 }
 
 impl Client {
-    pub fn new(url: impl reqwest::IntoUrl, options: ClientOptions) -> Result<Self, reqwest::Error> {
+    pub fn new(url: impl reqwest::IntoUrl, options: Options) -> Result<Self, reqwest::Error> {
         Ok(Self {
             url: url.into_url().unwrap(),
             http_client: reqwest::Client::builder()
@@ -231,14 +231,13 @@ pub struct Message<T> {
 mod tests {
     use super::*;
     use serde::Deserialize;
-    use server::Options;
-    use std::{collections::HashMap, sync::atomic::AtomicU16};
+    use std::collections::HashMap;
+    use std::sync::atomic::AtomicU16;
 
     #[tokio::test]
     async fn creates_queue() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         client
             .create_queue(common::CreateQueueRequest {
@@ -253,8 +252,7 @@ mod tests {
     #[tokio::test]
     async fn lists_queues_with_queues() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         let queue_name = "some_queue".to_string();
         let max_attempts = 5;
@@ -281,8 +279,7 @@ mod tests {
     #[tokio::test]
     async fn lists_queues_no_queues() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         let queues = client.list_queues().await.unwrap();
 
@@ -292,8 +289,7 @@ mod tests {
     #[tokio::test]
     async fn get_queue_none() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         let q: Option<common::ShowQueueResponse> = client.get_queue("some_queue").await.unwrap();
 
@@ -303,8 +299,7 @@ mod tests {
     #[tokio::test]
     async fn get_queue_some() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         client
             .create_queue(common::CreateQueueRequest {
@@ -328,8 +323,7 @@ mod tests {
     #[tokio::test]
     async fn updates_queue_max_attempts() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         client
             .create_queue(common::CreateQueueRequest {
@@ -365,8 +359,7 @@ mod tests {
     #[tokio::test]
     async fn updates_queue_max_visibility_timeout() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         client
             .create_queue(common::CreateQueueRequest {
@@ -402,8 +395,7 @@ mod tests {
     #[tokio::test]
     async fn updates_queue_none() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         client
             .create_queue(common::CreateQueueRequest {
@@ -440,8 +432,7 @@ mod tests {
     async fn delete_queue_none() {
         let (port, _server_handle) = serve().await;
 
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         client.delete_queue("some_queue").await.unwrap();
 
@@ -451,8 +442,7 @@ mod tests {
     #[tokio::test]
     async fn delete_queue_some() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         client
             .create_queue(common::CreateQueueRequest {
@@ -473,8 +463,7 @@ mod tests {
     #[tokio::test]
     async fn enqueues_message() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         client
             .create_queue(common::CreateQueueRequest {
@@ -494,8 +483,7 @@ mod tests {
     #[tokio::test]
     async fn receive_no_message() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         let queue = "some_queue".to_string();
 
@@ -522,8 +510,7 @@ mod tests {
     #[tokio::test]
     async fn receive_with_message() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         let queue = "some_queue".to_string();
 
@@ -557,8 +544,7 @@ mod tests {
     #[tokio::test]
     async fn completes_uncompleted_message() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         let queue = "some_queue".to_string();
 
@@ -596,8 +582,7 @@ mod tests {
     #[tokio::test]
     async fn fails_message() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         let queue = "some_queue".to_string();
 
@@ -635,8 +620,7 @@ mod tests {
     #[tokio::test]
     async fn visibility_timeout_unlocks_locked_message_and_respects_max_attempts() {
         let (port, _server_handle) = serve().await;
-        let client =
-            Client::new(format!("http://localhost:{port}"), ClientOptions::default()).unwrap();
+        let client = Client::new(format!("http://localhost:{port}"), Options::default()).unwrap();
 
         let queue = "some_queue".to_string();
 
@@ -686,7 +670,7 @@ mod tests {
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
-        let options = Options {
+        let options = server::Options {
             port,
             request_timeout: Some(5),
             database: ":memory:".to_string(),
