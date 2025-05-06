@@ -12,20 +12,42 @@ It is vaguely similar in interface and semantics to AWS [SQS](https://aws.amazon
 
 The interface is HTTP, so you can use use any language as a client.
 
-hq is targeted at use cases where:
-- you want something you can totally understand, top to bottom
-- you do not need SQS's durability/availability/performance/scale guarantees
-- you want restart durability
-- your application cannot reach the internet and you need to run a message/job queue yourself
-- you want to run your message/job queue on the same node as your worker(s)
-- you want to run your message/job queue on a different node than your worker(s)
-- you want to use a language of your choice to communicate with your message/job queue over HTTP
-- you want a message/job queue to run on limited hardware
+## example
 
-hq is _not_ targeted at use cases where:
-- you need SQS's durability/availability/performance/scale guarantees
+```sh
+# create a queue
+$ curl -XPOST "http://localhost:9999/queues?name=myqueue&max_attempts=5&visibility_timeout_seconds=30"
+
+# send a message
+$ curl -XPOST "http://localhost:9999/queues/myqueue/enqueue" -H'Content-type: application/json' -d'{"a":1, "b":2}'
+{"message_id":"7aab413c-d164-468e-ab3b-14a4ee1ece3d"}
+
+# receive a message
+$ curl -XGET "http://localhost:9999/queues/myqueue/receive"
+{"id":"7aab413c-d164-468e-ab3b-14a4ee1ece3d","args":{"a":1,"b":2},"queue":"myqueue","attempts":1}%   
+```
+
+## design
+
+hq works on a pull model rather than a push model: producers publish messages to queues, and clients receive messages by polling those queues. This ensures that clients are not overloaded and only consume messages when they are able to do so.
+
+## when to use
+
+- you have small-to-medium message volume
+- you want to run a message queue on a single node
+- you want a message queue that is tolerant of restarts
+- you want to communicate with your message queue over HTTP
+- you want a message queue you can totally understand, top-to-bottom
+- you want "pull"-style delivery semantics
+
+## when not to use
+
+- you have truly large message volume
+- your message queue needs multi-node high availability (e.g. AWS SQS)
+- you want an in-process message queue
 - you want the transactional semantics that come from having your message/job queue database being the same as your application database (e.g., Sidekiq, Oban, etc.)
- 
+- you want "push"-style delivery semantics
+
 ## operational model
 
 - Messages are the unit of communication

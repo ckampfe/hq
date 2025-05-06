@@ -24,6 +24,7 @@
 // - [x] include inserted_at and updated_at for GET /queues/{name} and GET /queues
 // - [ ] improve queue metadata for GET /queues/{name}
 // - [ ] improve queue metadata for GET /queues
+// - [ ] think about dead letter queues
 // messages
 // - [x] enqueue message
 // - [x] receive message
